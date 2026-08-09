@@ -1,0 +1,40 @@
+# Environment Variables
+.env
+*.env
+*.env.local
+!.env.example
+!backend/.env.example
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+mech_rag_backend/
+.venv/
+
+# Storage, Databases & Test Artifacts
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+backend/data/chroma_db/*
+!backend/data/chroma_db/.gitkeep
+backend/data/metadata.db
+*.db
+*.pdf
+tests/test_chroma_db/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
