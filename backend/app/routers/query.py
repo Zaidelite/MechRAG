@@ -25,8 +25,17 @@ async def query_rag(request: QueryRequest):
 
     response = rag_engine.query(
         query_text=request.query,
-        filters=filters if filters else None
+        filters=filters if filters else None,
+        model_name=request.model_name
     )
 
     return response
+
+@router.get("/models")
+async def get_models():
+    """
+    Returns list of all available Gemini text generation models for the active API key.
+    """
+    models = rag_engine.llm.list_available_models()
+    return {"models": models}
 

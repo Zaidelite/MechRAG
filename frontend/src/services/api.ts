@@ -15,12 +15,18 @@ const apiClient = axios.create({
   },
 });
 
-export const sendQuery = async (query: string, bookFilter?: string): Promise<QueryResponse> => {
+export const sendQuery = async (query: string, bookFilter?: string, modelName?: string): Promise<QueryResponse> => {
   const payload: QueryRequest = {
     query,
     book_filter: bookFilter || undefined,
+    model_name: modelName || undefined,
   };
   const response = await apiClient.post<QueryResponse>('/query', payload);
+  return response.data;
+};
+
+export const fetchAvailableModels = async (): Promise<{ models: Array<{ id: string; name: string; description?: string }> }> => {
+  const response = await apiClient.get<{ models: Array<{ id: string; name: string; description?: string }> }>('/query/models');
   return response.data;
 };
 

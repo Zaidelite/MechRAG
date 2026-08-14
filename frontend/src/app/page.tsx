@@ -1,50 +1,84 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Sidebar from '../components/Sidebar';
 import MathMarkdown from '../components/MathMarkdown';
-import CitationDrawer from '../components/CitationDrawer';
-import UploadModal from '../components/UploadModal';
-import { sendQuery, listDocuments, deleteDocument } from '../services/api';
-import { ChatMessage, Citation, DocumentRecord } from '../types';
-import { Send, Sparkles, BookOpen, AlertCircle, Loader2, Bot, User } from 'lucide-react';
+import { sendQuery, fetchAvailableModels } from '../services/api';
+import { ChatMessage } from '../types';
+import { ArrowUp, Loader2, Sparkles, ChevronDown } from 'lucide-react';
+
+interface ModelOption {
+  id: string;
+  name: string;
+  badge?: string;
+}
+
+const FALLBACK_MODELS: ModelOption[] = [
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', badge: 'Flash' },
+];
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Document Library State
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [activeBookFilter, setActiveBookFilter] = useState<string | null>(null);
-
-  // Modals & Drawers
-  const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
-  const [selectedCitations, setSelectedCitations] = useState<Citation[]>([]);
+  // Model Selection State
+  const [models, setModels] = useState<ModelOption[]>(FALLBACK_MODELS);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState<boolean>(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchDocumentList = async () => {
-    try {
-      const res = await listDocuments();
-      setDocuments(res.documents || []);
-    } catch (err) {
-      console.error('Error fetching document list:', err);
-    }
-  };
-
+  // Fetch dynamic verified model list from backend on mount
   useEffect(() => {
-    fetchDocumentList();
+    const loadModels = async () => {
+      try {
+        const res = await fetchAvailableModels();
+        if (res.models && res.models.length > 0) {
+          const apiModels: ModelOption[] = res.models.map((m) => {
+            let badge: string | undefined = undefined;
+            const lower = m.id.toLowerCase();
+            if (lower.includes('gemma')) badge = 'Gemma';
+            else if (lower.includes('pro')) badge = 'Pro';
+            else if (lower.includes('flash')) badge = 'Flash';
+
+            return {
+              id: m.id,
+              name: m.name || m.id,
+              badge,
+            };
+          });
+          setModels(apiModels);
+          if (!apiModels.some((m) => m.id === selectedModel)) {
+            setSelectedModel(apiModels[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch dynamic model list from backend:', err);
+      }
+    };
+    loadModels();
   }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async (queryText?: string) => {
-    const textToSend = queryText || inputValue;
-    if (!textToSend.trim() || isLoading) return;
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSend = async () => {
+    const textToSend = inputValue.trim();
+    if (!textToSend || isLoading) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -54,11 +88,11 @@ export default function Home() {
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    if (!queryText) setInputValue('');
+    setInputValue('');
     setIsLoading(true);
 
     try {
-      const res = await sendQuery(textToSend, activeBookFilter || undefined);
+      const res = await sendQuery(textToSend, undefined, selectedModel);
 
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -69,7 +103,7 @@ export default function Home() {
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err: any) {
+    } catch {
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
@@ -83,176 +117,127 @@ export default function Home() {
     }
   };
 
-  const handleDeleteDoc = async (docId: string) => {
-    try {
-      await deleteDocument(docId);
-      fetchDocumentList();
-    } catch (err) {
-      console.error('Failed to delete document:', err);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
-  const openCitations = (citations?: Citation[]) => {
-    if (citations && citations.length > 0) {
-      setSelectedCitations(citations);
-      setIsDrawerOpen(true);
-    }
-  };
+  const isEmpty = messages.length === 0;
+  const currentModelObj = models.find((m) => m.id === selectedModel);
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Sidebar Navigation */}
-      <Sidebar
-        documents={documents}
-        activeBookFilter={activeBookFilter}
-        onSelectBookFilter={setActiveBookFilter}
-        onDeleteDocument={handleDeleteDoc}
-        onOpenUploadModal={() => setIsUploadOpen(true)}
-        onSelectSamplePrompt={(prompt) => handleSend(prompt)}
-      />
+    <div className="mech-root">
+      {/* Header */}
+      <header className="mech-header">
+        <h1 className="mech-title">
+          MechRAG
+          <span className="mech-version">v1.0.0</span>
+        </h1>
+      </header>
 
-      {/* Main Chat Interface */}
-      <main className="flex-1 flex flex-col h-full bg-slate-950 relative overflow-hidden">
-        {/* Top Navbar */}
-        <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md px-6 flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-slate-200">
-              {activeBookFilter ? (
-                <span className="flex items-center gap-2">
-                  <span className="text-slate-400">Filter:</span>
-                  <span className="text-cyan-400 bg-cyan-950/50 border border-cyan-800/40 px-2 py-0.5 rounded font-mono text-xs">
-                    {activeBookFilter}
-                  </span>
-                </span>
-              ) : (
-                'Mechanical Engineering Knowledge Engine'
-              )}
-            </h2>
+      {/* Chat area */}
+      <main className={`mech-main ${isEmpty ? 'mech-main--empty' : ''}`}>
+        {isEmpty ? (
+          <div className="mech-empty">
+            <p className="mech-empty-hint">Ask anything about your engineering textbooks…</p>
           </div>
-
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Local Embeddings (BGE) + Gemini RAG
-          </div>
-        </header>
-
-        {/* Chat Feed */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl text-cyan-400">
-                <Sparkles className="w-10 h-10" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-100">Mechanical Engineering RAG Assistant</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Ask questions about fluid mechanics, Navier-Stokes derivations, thermodynamics, or pipe flow.
-                Responses feature preserved LaTeX equations ($\sigma = F/A$) and traceable citations.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-4 max-w-4xl ${msg.sender === 'user' ? 'ml-auto justify-end' : ''}`}
-              >
-                {msg.sender === 'assistant' && (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white flex-shrink-0 shadow-lg shadow-cyan-500/20">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                )}
-
-                <div
-                  className={`rounded-2xl p-5 border text-sm max-w-3xl space-y-3 ${
-                    msg.sender === 'user'
-                      ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white border-cyan-500/30'
-                      : msg.isError
-                      ? 'bg-red-950/40 border-red-800/50 text-red-200'
-                      : 'bg-slate-900/80 border-slate-800/80 text-slate-200 backdrop-blur-md shadow-xl'
-                  }`}
-                >
-                  {msg.sender === 'user' ? (
-                    <p className="leading-relaxed font-medium">{msg.text}</p>
-                  ) : (
+        ) : (
+          <div className="mech-feed custom-scrollbar">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`mech-msg mech-msg--${msg.sender}`}>
+                {msg.sender === 'user' ? (
+                  <p className="mech-user-text">{msg.text}</p>
+                ) : (
+                  <div className={`mech-ai-text ${msg.isError ? 'mech-ai-text--error' : ''}`}>
                     <MathMarkdown content={msg.text} />
-                  )}
-
-                  {/* Citations Pill Button */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                      <button
-                        onClick={() => openCitations(msg.citations)}
-                        className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2.5 py-1 rounded-md transition-colors font-medium"
-                      >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span>View {msg.citations.length} Verified Sources</span>
-                      </button>
-                      <span className="text-[10px] text-slate-500 font-mono">{msg.timestamp}</span>
-                    </div>
-                  )}
-                </div>
-
-                {msg.sender === 'user' && (
-                  <div className="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0">
-                    <User className="w-4 h-4" />
                   </div>
                 )}
               </div>
-            ))
-          )}
+            ))}
 
-          {isLoading && (
-            <div className="flex items-center gap-3 text-slate-400 text-xs font-mono p-4 bg-slate-900/50 rounded-xl border border-slate-800/50 max-w-sm">
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-              <span>Searching ChromaDB & RRF Reranking...</span>
-            </div>
-          )}
+            {isLoading && (
+              <div className="mech-msg mech-msg--assistant">
+                <div className="mech-thinking">
+                  <Loader2 className="mech-spinner" />
+                  <span>Thinking…</span>
+                </div>
+              </div>
+            )}
 
-          <div ref={chatEndRef} />
-        </div>
+            <div ref={chatEndRef} />
+          </div>
+        )}
 
-        {/* Input Bar */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-900/50 backdrop-blur-md">
+        {/* Input Box */}
+        <div className={`mech-input-wrap ${isEmpty ? 'mech-input-wrap--centered' : ''}`}>
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-            className="max-w-4xl mx-auto relative flex items-center"
+            onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+            className="mech-input-form"
           >
-            <input
-              type="text"
-              placeholder="Ask an engineering question or formula (e.g. Navier-Stokes, Reynolds number)..."
+            {/* Dynamic Model Picker on Left Side */}
+            <div className="mech-model-picker-wrap" ref={dropdownRef}>
+              <button
+                type="button"
+                className="mech-model-picker-btn"
+                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                title="Select Model"
+              >
+                <Sparkles className="mech-model-icon" />
+                <span className="mech-model-name">{currentModelObj?.name || selectedModel}</span>
+                <ChevronDown className={`mech-model-chevron ${isModelDropdownOpen ? 'mech-model-chevron--open' : ''}`} />
+              </button>
+
+              {isModelDropdownOpen && (
+                <div className="mech-model-dropdown">
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      className={`mech-model-item ${selectedModel === model.id ? 'mech-model-item--active' : ''}`}
+                      onClick={() => {
+                        setSelectedModel(model.id);
+                        setIsModelDropdownOpen(false);
+                      }}
+                    >
+                      <span className="mech-model-item-title">{model.name}</span>
+                      {model.badge && (
+                        <span className="mech-model-item-badge">{model.badge}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <textarea
+              ref={inputRef}
+              id="mech-query-input"
+              placeholder="Ask an engineering question…"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
               disabled={isLoading}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-4 py-3.5 pr-12 text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors shadow-inner"
+              rows={1}
+              className="mech-textarea"
             />
+
             <button
               type="submit"
+              id="mech-send-btn"
               disabled={!inputValue.trim() || isLoading}
-              className="absolute right-2 p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white disabled:opacity-40 transition-all shadow-md shadow-cyan-500/20"
+              className="mech-send-btn"
+              aria-label="Send message"
             >
-              <Send className="w-4 h-4" />
+              <ArrowUp className="mech-send-icon" />
             </button>
           </form>
+          <p className="mech-disclaimer">
+            MechRAG · local embeddings · traceable citations
+          </p>
         </div>
       </main>
-
-      {/* Modals & Drawers */}
-      <CitationDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        citations={selectedCitations}
-      />
-
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-        onUploadComplete={() => {
-          fetchDocumentList();
-          setIsUploadOpen(false);
-        }}
-      />
     </div>
   );
 }

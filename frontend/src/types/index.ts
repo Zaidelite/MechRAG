@@ -13,6 +13,7 @@ export interface QueryRequest {
   query: string;
   subject_filter?: string;
   book_filter?: string;
+  model_name?: string;
 }
 
 export interface QueryResponse {

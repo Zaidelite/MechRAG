@@ -111,7 +111,7 @@ class RAGEngine:
             update_status(doc_id, "failed", error_message=str(e))
             raise e
 
-    def query(self, query_text: str, top_k_vector: int = 10, top_n_rerank: int = 4, filters: Optional[Dict[str, Any]] = None) -> QueryResponse:
+    def query(self, query_text: str, top_k_vector: int = 10, top_n_rerank: int = 4, filters: Optional[Dict[str, Any]] = None, model_name: Optional[str] = None) -> QueryResponse:
         """High-level query pipeline: Vector Search + BM25 -> RRF Reranking -> System Prompt -> Gemini LLM -> Citation Output."""
         # 1. Dense Vector Similarity Search
         vector_docs = self.retriever.similarity_search(query_text, top_k=top_k_vector, filters=filters)
@@ -143,7 +143,7 @@ class RAGEngine:
         )
 
         # 5. Invoke Gemini LLM
-        llm_response = self.llm.generate_response(prompt_value.to_string())
+        llm_response = self.llm.generate_response(prompt_value.to_string(), model_name=model_name)
 
         # 6. Format Citations
         citations = self.citation.format_citations(top_context_docs)

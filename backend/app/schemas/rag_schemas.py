@@ -13,6 +13,7 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="Mechanical engineering search query or question")
     subject_filter: Optional[str] = Field(None, description="Filter search by subject (e.g. Thermodynamics)")
     book_filter: Optional[str] = Field(None, description="Filter search by specific book title")
+    model_name: Optional[str] = Field(None, description="Dynamic LLM model choice (e.g. gemini-2.5-flash-lite)")
 
 class CitationSchema(BaseModel):
     book_title: str

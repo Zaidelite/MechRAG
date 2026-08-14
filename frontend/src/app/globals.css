@@ -2,13 +2,487 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ── Design tokens ── */
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+  --bg:            #0d0d12;
+  --surface:       rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --border:        rgba(255, 255, 255, 0.07);
+  --border-focus:  rgba(126, 211, 139, 0.35);
+
+  /* Soft engineering green */
+  --green:         #7ed38b;
+  --green-dim:     #5db86a;
+  --green-glow:    rgba(126, 211, 139, 0.12);
+
+  --text-primary:  #ffffff;
+  --text-muted:    rgba(255, 255, 255, 0.35);
+  --text-dimmer:   rgba(255, 255, 255, 0.18);
+
+  --input-bg:      rgba(255, 255, 255, 0.04);
+  --input-radius:  18px;
+  --max-w:         760px;
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+/* ── Reset / base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Root layout ── */
+.mech-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.mech-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  background: rgba(13, 13, 18, 0.75);
+  position: relative;
+  z-index: 10;
+}
+
+.mech-title {
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--green);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  user-select: none;
+}
+
+.mech-version {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-dimmer);
+  letter-spacing: 0.01em;
+}
+
+/* ── Main container ── */
+.mech-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* When chat is empty, center content vertically */
+.mech-main--empty {
+  justify-content: center;
+  align-items: center;
+}
+
+/* ── Empty state ── */
+.mech-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  margin-bottom: 100px;
+}
+
+.mech-empty-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+/* ── Chat feed ── */
+.mech-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: var(--max-w);
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Message rows ── */
+.mech-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* User messages – right aligned bubble */
+.mech-msg--user {
+  align-items: flex-end;
+}
+
+.mech-user-text {
+  background: rgba(126, 211, 139, 0.08);
+  border: 1px solid rgba(126, 211, 139, 0.18);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--green);
+  max-width: 85%;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* AI messages – left aligned, no bubble */
+.mech-msg--assistant {
+  align-items: flex-start;
+}
+
+.mech-ai-text {
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.mech-ai-text--error {
+  color: #f87171;
+}
+
+/* Thinking indicator */
+.mech-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.mech-spinner {
+  width: 15px;
+  height: 15px;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Input wrapper ── */
+.mech-input-wrap {
+  flex-shrink: 0;
+  padding: 12px 20px 18px;
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* When empty state, absolutely center the input in the viewport */
+.mech-input-wrap--centered {
+  position: absolute;
+  bottom: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 20px;
+}
+
+/* ── Input form ── */
+.mech-input-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--input-radius);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.mech-input-form:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+
+/* ── Model Picker Dropdown (Left side of text bar) ── */
+.mech-model-picker-wrap {
+  position: relative;
+  align-self: center;
+  margin-left: 8px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+
+.mech-model-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.mech-model-picker-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--green);
+  border-color: rgba(126, 211, 139, 0.25);
+}
+
+.mech-model-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--green);
+}
+
+.mech-model-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mech-model-chevron {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
+  opacity: 0.6;
+}
+
+.mech-model-chevron--open {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.mech-model-dropdown {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  width: 220px;
+  background: rgba(18, 18, 25, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 6px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(126, 211, 139, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 50;
+  animation: dropdownFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mech-model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  text-align: left;
+}
+
+.mech-model-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--green);
+}
+
+.mech-model-item--active {
+  background: rgba(126, 211, 139, 0.1) !important;
+  color: var(--green) !important;
+  font-weight: 600;
+}
+
+.mech-model-item-title {
+  white-space: nowrap;
+}
+
+.mech-model-item-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dimmer);
+}
+
+.mech-model-item--active .mech-model-item-badge {
+  background: rgba(126, 211, 139, 0.2);
+  color: var(--green);
+}
+
+/* ── Textarea ── */
+.mech-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 14px 12px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.6;
+  color: var(--green);
+  caret-color: var(--green);
+  max-height: 160px;
+  min-height: 52px;
+  field-sizing: content;
+}
+
+.mech-textarea::placeholder {
+  color: var(--text-dimmer);
+}
+
+.mech-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Send button ── */
+.mech-send-btn {
+  flex-shrink: 0;
+  margin: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--green);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.mech-send-btn:hover:not(:disabled) {
+  background: #97e8a3;
+  transform: scale(1.05);
+}
+
+.mech-send-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.mech-send-btn:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mech-send-icon {
+  width: 16px;
+  height: 16px;
+  color: #0d0d12;
+}
+
+.mech-send-btn:disabled .mech-send-icon {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Disclaimer ── */
+.mech-disclaimer {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-dimmer);
+  letter-spacing: 0.02em;
+}
+
+/* ── Scrollbar ── */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── KaTeX dark theme ── */
+.katex { color: var(--text-primary) !important; }
+
+/* ── Markdown prose overrides ── */
+.mech-ai-text p { margin-bottom: 0.6em; }
+.mech-ai-text p:last-child { margin-bottom: 0; }
+.mech-ai-text h1, .mech-ai-text h2, .mech-ai-text h3 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+}
+.mech-ai-text ul, .mech-ai-text ol {
+  padding-left: 1.4em;
+  margin-bottom: 0.6em;
+}
+.mech-ai-text li { margin-bottom: 0.25em; }
+.mech-ai-text code {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 0.85em;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: #c9d1d9;
+}
+.mech-ai-text pre {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.mech-ai-text pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.83rem;
 }

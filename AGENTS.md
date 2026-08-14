@@ -98,7 +98,7 @@ MechRAG/
 ---
 
 ## Future / Next Phase Tasks
-- [ ] **Push project repository to GitHub.**
+- [x] **Push project repository to GitHub.**
 - [ ] **Enhance frontend design & visual aesthetics** (animations, themes, micro-interactions).
 - [ ] **Deploy platform to web hosting / cloud infrastructure.**
 

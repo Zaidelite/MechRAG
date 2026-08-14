@@ -1,145 +1,171 @@
 'use client';
 
 import React from 'react';
-import { BookOpen, Plus, Trash2, Cpu, FileText, Sparkles, HelpCircle } from 'lucide-react';
+import { ChevronLeft, Sparkles, BookOpen, Plus, Trash2, Upload, FileText } from 'lucide-react';
 import { DocumentRecord } from '../types';
 
 interface SidebarProps {
+  isOpen: boolean;
+  onToggle: () => void;
   documents: DocumentRecord[];
   activeBookFilter: string | null;
   onSelectBookFilter: (filename: string | null) => void;
   onDeleteDocument: (docId: string) => void;
   onOpenUploadModal: () => void;
-  onSelectSamplePrompt: (prompt: string) => void;
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  onToggle,
   documents,
   activeBookFilter,
   onSelectBookFilter,
   onDeleteDocument,
   onOpenUploadModal,
-  onSelectSamplePrompt,
+  selectedModel,
+  onModelChange,
 }) => {
-  const samplePrompts = [
-    'What are the Navier-Stokes equations for incompressible fluid flow?',
-    'Explain hydrostatic pressure distribution and buoyant force.',
-    'What is Reynolds number and pipe head loss in viscous flow?',
-    'Derive Bernoulli equation for unsteady irrotational flow.',
-  ];
-
   return (
-    <aside className="w-80 bg-slate-900/90 border-r border-slate-800/80 flex flex-col h-full overflow-hidden backdrop-blur-xl">
-      {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 text-white shadow-lg shadow-cyan-500/20">
-            <Cpu className="w-5 h-5" />
+    <>
+      {/* Overlay for mobile — click to close */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={onToggle}
+        />
+      )}
+
+      {/* Sidebar panel */}
+      <aside
+        className={`
+          fixed top-0 left-0 z-40 h-full w-72
+          bg-[#111118] border-r border-white/[0.06]
+          flex flex-col
+          sidebar-transition
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        {/* Header — Brand + Close */}
+        <div className="h-14 px-4 flex items-center justify-between border-b border-white/[0.06] flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-sm font-semibold text-white tracking-tight">MechRAG</span>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-100 tracking-tight">MechRAG</h1>
-            <p className="text-[11px] text-slate-400 font-mono">Formula & Citation Engine</p>
-          </div>
+          <button
+            onClick={onToggle}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+            title="Close sidebar"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
-      </div>
 
-      {/* Library Section */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-              Textbook Library
-            </span>
-            <button
-              onClick={onOpenUploadModal}
-              className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded-md transition-colors"
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-5">
+
+          {/* ── Model Selection ── */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider px-1 mb-2 block">
+              Model
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => onModelChange(e.target.value)}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-slate-200 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all cursor-pointer appearance-none"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 10px center',
+              }}
             >
-              <Plus className="w-3.5 h-3.5" />
-              Add PDF
-            </button>
+              <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gemini-flash-latest">Gemini Flash Latest</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-flash-lite-latest">Gemini Flash Lite</option>
+            </select>
           </div>
 
-          <div className="space-y-1.5">
-            <button
-              onClick={() => onSelectBookFilter(null)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${
-                activeBookFilter === null
-                  ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-300 hover:bg-slate-800/50'
-              }`}
-            >
-              <span className="flex items-center gap-2 truncate">
-                <FileText className="w-3.5 h-3.5 flex-shrink-0" />
-                All Indexed Books
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">{documents.length}</span>
-            </button>
+          {/* ── Books ── */}
+          <div>
+            <div className="flex items-center justify-between px-1 mb-2">
+              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                Books
+              </label>
+              <span className="text-[10px] text-slate-600 font-mono">{documents.length}</span>
+            </div>
 
-            {documents.length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl">
-                <p className="text-xs text-slate-500 mb-2">No textbooks uploaded yet.</p>
-                <button
-                  onClick={onOpenUploadModal}
-                  className="text-xs text-cyan-400 hover:underline font-medium"
-                >
-                  Upload your first PDF
-                </button>
-              </div>
-            ) : (
-              documents.map((doc) => (
+            <div className="space-y-0.5">
+              {/* All Books option */}
+              <button
+                onClick={() => onSelectBookFilter(null)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all ${
+                  activeBookFilter === null
+                    ? 'bg-white/[0.08] text-white font-medium'
+                    : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
+                }`}
+              >
+                All Books
+              </button>
+
+              {/* Individual books */}
+              {documents.map((doc) => (
                 <div
                   key={doc.document_id}
-                  className={`group relative flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all border ${
+                  className={`group flex items-center justify-between rounded-lg transition-all ${
                     activeBookFilter === doc.filename
-                      ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
-                      : 'text-slate-300 border-slate-800/50 hover:bg-slate-800/40'
+                      ? 'bg-white/[0.08]'
+                      : 'hover:bg-white/[0.04]'
                   }`}
                 >
                   <button
                     onClick={() => onSelectBookFilter(doc.filename)}
-                    className="flex-1 text-left truncate mr-2"
+                    className={`flex-1 text-left px-3 py-2 text-[13px] truncate ${
+                      activeBookFilter === doc.filename
+                        ? 'text-white font-medium'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
                   >
-                    <span className="font-medium block truncate">{doc.book_title || doc.filename}</span>
-                    <span className="text-[10px] text-slate-500 block">
-                      {doc.total_pages ? `${doc.total_pages} Pages` : doc.status}
+                    <span className="block truncate">{doc.book_title || doc.filename}</span>
+                    <span className="block text-[10px] text-slate-600 mt-0.5">
+                      {doc.total_pages ? `${doc.total_pages} pages` : doc.status}
                     </span>
                   </button>
-
                   <button
                     onClick={() => onDeleteDocument(doc.document_id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
-                    title="Delete document"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 mr-1 text-slate-600 hover:text-red-400 transition-all"
+                    title="Delete"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              ))
-            )}
+              ))}
+
+              {documents.length === 0 && (
+                <p className="text-[12px] text-slate-600 px-3 py-3">
+                  No books uploaded yet.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Engineering Prompts Section */}
-        <div>
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3 px-1 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            Quick Prompts
-          </span>
-          <div className="space-y-1.5">
-            {samplePrompts.map((prompt, idx) => (
-              <button
-                key={idx}
-                onClick={() => onSelectSamplePrompt(prompt)}
-                className="w-full text-left p-2.5 rounded-lg bg-slate-950/40 border border-slate-800/60 hover:border-indigo-500/40 hover:bg-indigo-950/20 text-slate-300 hover:text-indigo-200 text-xs transition-all flex items-start gap-2"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5" />
-                <span className="line-clamp-2 leading-relaxed">{prompt}</span>
-              </button>
-            ))}
-          </div>
+        {/* Bottom — Upload Button */}
+        <div className="p-3 border-t border-white/[0.06] flex-shrink-0">
+          <button
+            onClick={onOpenUploadModal}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-slate-300 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:text-white hover:border-white/[0.12] transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            Upload PDF
+          </button>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

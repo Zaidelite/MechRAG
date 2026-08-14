@@ -24,9 +24,9 @@ services:
       dockerfile: Dockerfile
     container_name: mech_rag_frontend
     ports:
-      - "3001:3000"
+      - "3001:3001"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     depends_on:
       - backend
     restart: unless-stopped

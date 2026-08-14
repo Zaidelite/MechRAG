@@ -1,6 +1,6 @@
 import os
 import re
-import fitz  # PyMuPDF
+import pymupdf as fitz
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from langchain_core.documents import Document
