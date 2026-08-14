@@ -16,10 +16,11 @@ import {
   Upload,
   BookOpen,
   Trash2,
+  Maximize2,
   Sparkles
 } from 'lucide-react';
 import MathMarkdown from '../components/MathMarkdown';
-import Sidebar, { ChatSession } from '../components/Sidebar';
+import CitationDrawer from '../components/CitationDrawer';
 import UploadModal from '../components/UploadModal';
 import {
   sendQuery,
@@ -45,7 +46,7 @@ const WELCOME = {
 let idCounter = 1;
 const nextId = () => `m_${idCounter++}`;
 
-export default function Home() {
+export default function MechRAGChatNoKey() {
   const [collapsed, setCollapsed] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(true);
 
@@ -65,7 +66,8 @@ export default function Home() {
   const [availableModels, setAvailableModels] = useState(MODELS);
   const [model, setModel] = useState(MODELS[0].id);
 
-  // Upload Modal
+  // Modals & Drawers
+  const [activeCitations, setActiveCitations] = useState<Citation[] | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -352,6 +354,7 @@ export default function Home() {
                 role={m.role}
                 text={m.text}
                 citations={m.citations}
+                onOpenCitationsDrawer={(cits) => setActiveCitations(cits)}
               />
             ))}
             {isThinking && <ThinkingBubble />}
@@ -400,6 +403,15 @@ export default function Home() {
         </div>
       </main>
 
+      {/* Citations Drawer */}
+      {activeCitations && (
+        <CitationDrawer
+          isOpen={!!activeCitations}
+          onClose={() => setActiveCitations(null)}
+          citations={activeCitations}
+        />
+      )}
+
       {/* Upload Modal */}
       {isUploadModalOpen && (
         <UploadModal
@@ -419,11 +431,13 @@ export default function Home() {
 function Message({
   role,
   text,
-  citations
+  citations,
+  onOpenCitationsDrawer
 }: {
   role: string;
   text: string;
   citations?: Citation[];
+  onOpenCitationsDrawer?: (c: Citation[]) => void;
 }) {
   const isUser = role === 'user';
   const [expandedPassages, setExpandedPassages] = useState(false);
@@ -439,7 +453,7 @@ function Message({
       >
         <MathMarkdown content={text} />
 
-        {/* Clean expandable passages section directly inside agent message bubble */}
+        {/* Clean expandable passages section for Agent replies */}
         {!isUser && citations && citations.length > 0 && (
           <div style={styles.citationContainer}>
             <div style={styles.citationHeaderRow}>
@@ -452,6 +466,15 @@ function Message({
                   {expandedPassages ? 'Hide' : 'View'} {citations.length} Verified {citations.length === 1 ? 'Passage' : 'Passages'}
                 </span>
                 {expandedPassages ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+
+              <button
+                style={styles.drawerExpandBtn}
+                onClick={() => onOpenCitationsDrawer && onOpenCitationsDrawer(citations)}
+                title="Open Side View Drawer"
+              >
+                <Maximize2 size={11} />
+                <span>Full Passages Side View</span>
               </button>
             </div>
 
@@ -922,6 +945,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 9px',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
+  },
+  drawerExpandBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    background: 'transparent',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 4,
+    color: COLORS.wheatDim,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 10.5,
+    padding: '3px 7px',
+    cursor: 'pointer',
   },
   passagesList: {
     display: 'flex',
