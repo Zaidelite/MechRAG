@@ -9,11 +9,16 @@ class IngestionStatus(str, Enum):
     DONE = "done"
     FAILED = "failed"
 
+class ChatMessageSchema(BaseModel):
+    role: str = Field(..., description="Role of the speaker: 'user' or 'assistant'")
+    content: str = Field(..., description="Message content")
+
 class QueryRequest(BaseModel):
     query: str = Field(..., description="Mechanical engineering search query or question")
+    history: Optional[List[ChatMessageSchema]] = Field(default=None, description="Previous conversation history turns for multi-turn chat memory")
     subject_filter: Optional[str] = Field(None, description="Filter search by subject (e.g. Thermodynamics)")
     book_filter: Optional[str] = Field(None, description="Filter search by specific book title")
-    model_name: Optional[str] = Field(None, description="Dynamic LLM model choice (e.g. gemini-2.5-flash-lite)")
+    model_name: Optional[str] = Field(None, description="Dynamic LLM model choice (e.g. gemini-2.5-flash)")
 
 class CitationSchema(BaseModel):
     book_title: str

@@ -1,16 +1,17 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.config import settings
 
 class TextChunkerService:
     """
     Production-grade Heading-Aware Text Chunker Service.
-    Splits LangChain Document streams into ~800-token chunks (~3200 characters)
+    Splits LangChain Document streams into ~1100-token chunks (~4400 characters)
     with overlap (~150 tokens / 600 characters) while preserving LaTeX math blocks and metadata.
     """
-    def __init__(self, chunk_size: int = 3200, chunk_overlap: int = 600):
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+    def __init__(self, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = None):
+        self.chunk_size = chunk_size or (settings.CHUNK_SIZE * 4)
+        self.chunk_overlap = chunk_overlap or (settings.CHUNK_OVERLAP * 4)
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,

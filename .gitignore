@@ -16,6 +16,8 @@ venv/
 ENV/
 mech_rag_backend/
 .venv/
+.pytest_cache/
+*.log
 
 # Storage, Databases & Test Artifacts
 backend/data/uploads/*
@@ -25,20 +27,20 @@ backend/data/chroma_db/*
 backend/data/metadata.db
 *.db
 *.pdf
+!tests/sample_pdfs/.gitkeep
 tests/test_chroma_db/
+tests/output_chunks.json
 
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
-frontend_test/node_modules/
-frontend_test/.next/
-frontend_test/out/
-frontend_test/build/
+*.tsbuildinfo
 
-# OS / IDE
+# OS / IDE / Logs
 .DS_Store
 .vscode/
 .idea/
+
 

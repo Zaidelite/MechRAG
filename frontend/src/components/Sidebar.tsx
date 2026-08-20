@@ -29,8 +29,8 @@ interface SidebarProps {
   documents: DocumentRecord[];
   activeBookFilter: string | null;
   onSelectBookFilter: (bookTitle: string | null) => void;
-  onDeleteDocument: (docId: string) => void;
-  onOpenUploadModal: () => void;
+  onDeleteDocument?: (docId: string) => void;
+  onOpenUploadModal?: () => void;
   chats: ChatSession[];
   activeChatId: string;
   onSelectChat: (chatId: string) => void;
@@ -123,15 +123,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {documents.length}
               </span>
             </button>
-
-            <button
-              onClick={onOpenUploadModal}
-              title="Upload PDF Textbook"
-              className="flex items-center gap-1 bg-[#8fbf76]/10 border border-[#5f8a4d] rounded text-[#a9d98c] font-mono text-[10.5px] px-2 py-0.5 hover:bg-[#8fbf76]/20 transition-all cursor-pointer"
-            >
-              <Upload size={12} />
-              <span>Upload</span>
-            </button>
           </div>
 
           {pdfSectionOpen && (
@@ -153,11 +144,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               ) : (
                 documents.map((doc) => {
-                  const title = doc.book_title || doc.file_name;
+                  const title = doc.book_title || doc.filename;
                   const isSelected = activeBookFilter === title;
                   return (
                     <div
-                      key={doc.id}
+                      key={doc.document_id}
                       onClick={() => onSelectBookFilter(isSelected ? null : title)}
                       className={`
                         group flex items-center justify-between px-2.5 py-1.5 rounded-md text-[12.5px] transition-all cursor-pointer border box-border w-full
@@ -172,16 +163,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className="text-[10px] text-[#6d7a70] font-mono bg-[#0a0f0c] border border-[#1c2620] rounded px-1 py-0.5">
                           {doc.total_pages ? `${doc.total_pages}p` : ''}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteDocument(doc.id);
-                          }}
-                          title="Delete"
-                          className="p-0.5 text-[#6d7a70] hover:text-red-400 transition-all border-none bg-transparent cursor-pointer shrink-0"
-                        >
-                          <Trash2 size={12} />
-                        </button>
                       </div>
                     </div>
                   );

@@ -27,10 +27,10 @@ MechRAG/
 │   │   │   └── documents.py            # Document library management & purging router
 │   │   ├── services/                   # Decoupled Business Logic Services
 │   │   │   ├── parser.py               # PyMuPDF fast LaTeX character & equation parser
-│   │   │   ├── chunker.py              # Heading-aware 800-token chunker
+│   │   │   ├── chunker.py              # Heading-aware 1100-token chunker (150 token overlap)
 │   │   │   ├── embedder.py             # Local SentenceTransformers embedder (BAAI/bge-small-en-v1.5)
-│   │   │   ├── retriever.py            # ChromaDB vector similarity retriever
-│   │   │   ├── reranker.py             # Hybrid BM25 + Reciprocal Rank Fusion (RRF) reranker
+│   │   │   ├── retriever.py            # ChromaDB vector similarity retriever (Top 15 retrieval)
+│   │   │   ├── reranker.py             # Hybrid BM25 + Reciprocal Rank Fusion (RRF) reranker (Top 6 rerank)
 │   │   │   ├── prompt_builder.py       # Engineering system prompt & LaTeX context builder
 │   │   │   ├── llm.py                  # Free Google Gemini API client (gemini-2.5-flash)
 │   │   │   ├── citation.py             # Citation formatter (Book, Chapter, Page X, Snippet)
@@ -73,7 +73,7 @@ MechRAG/
 - **LLM Inference**: `ChatGoogleGenerativeAI` (`gemini-2.5-flash`)
 - **Frontend Web UI**: Next.js 14/15 + React 18 + Tailwind CSS (Port `3001`)
 - **Math Rendering**: KaTeX (`remark-math`, `rehype-katex`) for client-side zero-flicker LaTeX math
-- **Package Managers**: `uv` (Python environment `mech_rag_backend/`) & `npm` (Node)
+- **Package Managers**: `uv` or `pip` (Python virtual environment) & `npm` (Node)
 - **Containerization**: `docker-compose.yml`
 
 ## Coding conventions
@@ -98,7 +98,8 @@ MechRAG/
 ---
 
 ## Future / Next Phase Tasks
-- [x] **Push project repository to GitHub.**
+- [ ] **Session-based PDF Upload & Ephemeral Vector Store** (Isolated in-memory uploads without permanent VDB mutation).
 - [ ] **Enhance frontend design & visual aesthetics** (animations, themes, micro-interactions).
 - [ ] **Deploy platform to web hosting / cloud infrastructure.**
+
 

@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any, List
 from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 
+from app.config import settings
 from app.services.indexing_state import (
     init_db,
     compute_hash,
@@ -111,16 +112,47 @@ class RAGEngine:
             update_status(doc_id, "failed", error_message=str(e))
             raise e
 
-    def query(self, query_text: str, top_k_vector: int = 10, top_n_rerank: int = 4, filters: Optional[Dict[str, Any]] = None, model_name: Optional[str] = None) -> QueryResponse:
-        """High-level query pipeline: Vector Search + BM25 -> RRF Reranking -> System Prompt -> Gemini LLM -> Citation Output."""
+    def _get_search_query(self, query_text: str, history: Optional[List[Dict[str, str]]] = None) -> str:
+        """Contextualizes search query for retrieval when history contains previous turns."""
+        if not history:
+            return query_text
+
+        user_turns = [t.get("content", "") for t in history if t.get("role") == "user" and t.get("content")]
+        if not user_turns:
+            return query_text
+
+        last_user_query = user_turns[-1]
+        pronouns = {"it", "its", "this", "that", "these", "they", "them", "his", "her", "the"}
+        words = set(query_text.lower().split())
+        
+        # If query is short or contains follow-up pronouns/references
+        if len(query_text.split()) <= 7 or not words.isdisjoint(pronouns):
+            return f"{last_user_query} {query_text}"
+        return query_text
+
+    def query(
+        self,
+        query_text: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        top_k_vector: Optional[int] = None,
+        top_n_rerank: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        model_name: Optional[str] = None
+    ) -> QueryResponse:
+        """High-level query pipeline with multi-turn history: Vector Search + BM25 -> RRF Reranking -> System Prompt & History -> LLM -> Citation Output."""
+        k_vector = top_k_vector or settings.TOP_K_RETRIEVAL
+        n_rerank = top_n_rerank or settings.TOP_K_RERANK
+
+        search_query = self._get_search_query(query_text, history)
+
         # 1. Dense Vector Similarity Search
-        vector_docs = self.retriever.similarity_search(query_text, top_k=top_k_vector, filters=filters)
+        vector_docs = self.retriever.similarity_search(search_query, top_k=k_vector, filters=filters)
 
         # 2. Sparse BM25 Keyword Search
         bm25_docs = []
         if self._bm25_retriever:
             try:
-                bm25_docs = self._bm25_retriever.invoke(query_text)[:top_k_vector]
+                bm25_docs = self._bm25_retriever.invoke(search_query)[:k_vector]
             except Exception:
                 bm25_docs = []
 
@@ -132,18 +164,19 @@ class RAGEngine:
         top_context_docs = self.reranker.reciprocal_rank_fusion(
             vector_docs=vector_docs,
             bm25_docs=bm25_docs,
-            top_n=top_n_rerank
+            top_n=n_rerank
         )
 
-        # 4. Format Context & System Prompt
+        # 4. Format Context & System Prompt Messages with History
         formatted_context = self.prompt_builder.format_context_documents(top_context_docs)
-        prompt_value = self.prompt_builder.get_prompt_template().format_prompt(
-            context=formatted_context,
-            query=query_text
+        prompt_messages = self.prompt_builder.build_prompt_messages(
+            formatted_context=formatted_context,
+            query=query_text,
+            history=history
         )
 
-        # 5. Invoke Gemini LLM
-        llm_response = self.llm.generate_response(prompt_value.to_string(), model_name=model_name)
+        # 5. Invoke LLM
+        llm_response = self.llm.generate_response(prompt_messages, model_name=model_name)
 
         # 6. Format Citations
         citations = self.citation.format_citations(top_context_docs)
@@ -153,3 +186,60 @@ class RAGEngine:
             answer=llm_response,
             citations=citations
         )
+
+    def query_stream(
+        self,
+        query_text: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        top_k_vector: Optional[int] = None,
+        top_n_rerank: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        model_name: Optional[str] = None
+    ):
+        """Streaming query pipeline with multi-turn history: Vector Search + BM25 -> RRF Reranking -> LLM Stream -> Citations + Token SSE output."""
+        import json
+        k_vector = top_k_vector or settings.TOP_K_RETRIEVAL
+        n_rerank = top_n_rerank or settings.TOP_K_RERANK
+
+        search_query = self._get_search_query(query_text, history)
+
+        # 1. Dense Vector Similarity Search
+        vector_docs = self.retriever.similarity_search(search_query, top_k=k_vector, filters=filters)
+
+        # 2. Sparse BM25 Keyword Search
+        bm25_docs = []
+        if self._bm25_retriever:
+            try:
+                bm25_docs = self._bm25_retriever.invoke(search_query)[:k_vector]
+            except Exception:
+                bm25_docs = []
+
+        if not bm25_docs:
+            bm25_docs = vector_docs
+
+        # 3. Reciprocal Rank Fusion (RRF) Reranking
+        top_context_docs = self.reranker.reciprocal_rank_fusion(
+            vector_docs=vector_docs,
+            bm25_docs=bm25_docs,
+            top_n=n_rerank
+        )
+
+        # 4. Format Context & System Prompt Messages with History
+        formatted_context = self.prompt_builder.format_context_documents(top_context_docs)
+        prompt_messages = self.prompt_builder.build_prompt_messages(
+            formatted_context=formatted_context,
+            query=query_text,
+            history=history
+        )
+
+        # 5. Format Citations & send first event
+        citations_objs = self.citation.format_citations(top_context_docs)
+        citations_data = [c.dict() for c in citations_objs]
+
+        yield f"data: {json.dumps({'type': 'citations', 'citations': citations_data, 'data': citations_data})}\n\n"
+
+        # 6. Stream tokens from LLM
+        for token in self.llm.stream_response(prompt_messages, model_name=model_name):
+            yield f"data: {json.dumps({'type': 'token', 'content': token, 'data': token})}\n\n"
+
+        yield "data: [DONE]\n\n"

@@ -129,7 +129,19 @@ LLM_MODEL=gemini-2.5-flash
 
 ### Local Installation & Execution
 
-#### 1. Backend Server Setup
+#### Option A: Using `uv` (Recommended)
+```bash
+# Navigate to backend directory
+cd backend
+
+# Install dependencies into uv environment
+uv pip install -r requirements.txt
+
+# Launch FastAPI development server
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+#### Option B: Standard Python `venv`
 ```bash
 # Navigate to backend directory
 cd backend
@@ -146,6 +158,12 @@ uvicorn app.main:app --reload --port 8000
 ```
 - Interactive API Documentation (Swagger): `http://localhost:8000/docs`
 
+#### Option C: Docker Compose
+```bash
+# Build and start both Backend (8000) and Frontend (3001) containers
+docker-compose up --build
+```
+
 #### 2. Frontend Web UI Setup
 ```bash
 # Open a new terminal tab and navigate to frontend directory
@@ -158,6 +176,16 @@ npm install
 npm run dev
 ```
 - Access Web Application: `http://localhost:3001`
+
+---
+
+## Running Test Suite
+
+```bash
+# Execute end-to-end RAG pipeline & API integration tests
+PYTHONPATH=backend:tests python tests/test_api_endpoints.py
+PYTHONPATH=backend:tests python tests/test_rag_pipeline.py
+```
 
 ---
 

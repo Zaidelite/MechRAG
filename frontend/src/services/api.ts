@@ -3,7 +3,8 @@ import {
   QueryRequest,
   QueryResponse,
   DocumentStatusResponse,
-  DocumentRecord
+  DocumentRecord,
+  ChatHistoryItem
 } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -15,14 +16,84 @@ const apiClient = axios.create({
   },
 });
 
-export const sendQuery = async (query: string, bookFilter?: string, modelName?: string): Promise<QueryResponse> => {
+export const sendQuery = async (
+  query: string,
+  history?: ChatHistoryItem[],
+  bookFilter?: string,
+  modelName?: string
+): Promise<QueryResponse> => {
   const payload: QueryRequest = {
     query,
+    history: history && history.length > 0 ? history : undefined,
     book_filter: bookFilter || undefined,
     model_name: modelName || undefined,
   };
   const response = await apiClient.post<QueryResponse>('/query', payload);
   return response.data;
+};
+
+export const sendQueryStream = async (
+  query: string,
+  history: ChatHistoryItem[] | undefined,
+  bookFilter: string | undefined,
+  modelName: string | undefined,
+  onChunk: (token: string) => void,
+  onCitations: (citations: any[]) => void
+): Promise<void> => {
+  const payload: QueryRequest = {
+    query,
+    history: history && history.length > 0 ? history : undefined,
+    book_filter: bookFilter || undefined,
+    model_name: modelName || undefined,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/query/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || 'Streaming query request failed');
+  }
+
+  if (!response.body) {
+    throw new Error('ReadableStream not supported by response');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n\n');
+    buffer = lines.pop() || '';
+
+    for (const block of lines) {
+      const line = block.trim();
+      if (!line.startsWith('data: ')) continue;
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === '[DONE]') break;
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.type === 'citations' && Array.isArray(parsed.citations)) {
+          onCitations(parsed.citations);
+        } else if (parsed.type === 'token' && typeof parsed.content === 'string') {
+          onChunk(parsed.content);
+        }
+      } catch (e) {
+        console.error('Error parsing SSE json chunk:', e);
+      }
+    }
+  }
 };
 
 export const fetchAvailableModels = async (): Promise<{ models: Array<{ id: string; name: string; description?: string }> }> => {

@@ -23,13 +23,45 @@ async def query_rag(request: QueryRequest):
     if request.book_filter:
         filters["book_title"] = request.book_filter
 
+    history_dicts = [h.dict() for h in request.history] if request.history else None
+
     response = rag_engine.query(
         query_text=request.query,
+        history=history_dicts,
         filters=filters if filters else None,
         model_name=request.model_name
     )
 
     return response
+
+@router.post("/stream")
+async def query_rag_stream(request: QueryRequest):
+    """
+    RAG Search & Chat Streaming Endpoint (Server-Sent Events).
+    """
+    from fastapi.responses import StreamingResponse
+
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Query string cannot be empty."
+        )
+
+    filters = {}
+    if request.book_filter:
+        filters["book_title"] = request.book_filter
+
+    history_dicts = [h.dict() for h in request.history] if request.history else None
+
+    return StreamingResponse(
+        rag_engine.query_stream(
+            query_text=request.query,
+            history=history_dicts,
+            filters=filters if filters else None,
+            model_name=request.model_name
+        ),
+        media_type="text/event-stream"
+    )
 
 @router.get("/models")
 async def get_models():

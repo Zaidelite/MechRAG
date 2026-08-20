@@ -23,6 +23,7 @@ import Sidebar, { ChatSession } from '../components/Sidebar';
 import UploadModal from '../components/UploadModal';
 import {
   sendQuery,
+  sendQueryStream,
   listDocuments,
   deleteDocument,
   fetchAvailableModels
@@ -30,13 +31,21 @@ import {
 import { DocumentRecord, Citation, QueryResponse } from '../types';
 
 const MODELS = [
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Groq)' },
+  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (Groq)' },
+  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (Groq)' },
+  { id: 'gemma2-9b-it', label: 'Gemma 2 9B (Groq)' },
   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
 ];
 
-const WELCOME = {
+interface MessageItem {
+  id: string;
+  role: string;
+  text: string;
+  citations?: Citation[];
+}
+
+const WELCOME: MessageItem = {
   id: 'welcome',
   role: 'agent',
   text: 'How can I assist you with your studies?',
@@ -54,7 +63,7 @@ export default function Home() {
   const [selectedBookFilter, setSelectedBookFilter] = useState<string | null>(null);
 
   // In-memory chats (reset on refresh)
-  const [chats, setChats] = useState([
+  const [chats, setChats] = useState<{ id: string; title: string; messages: MessageItem[] }[]>([
     { id: 'c1', title: 'New chat', messages: [WELCOME] },
   ]);
   const [activeChatId, setActiveChatId] = useState('c1');
@@ -106,7 +115,7 @@ export default function Home() {
     }
   }, [activeChat?.messages, isThinking]);
 
-  const updateChatMessages = (chatId: string, updater: (msgs: any[]) => any[]) => {
+  const updateChatMessages = (chatId: string, updater: (msgs: MessageItem[]) => MessageItem[]) => {
     setChats((prev) =>
       prev.map((c) => (c.id === chatId ? { ...c, messages: updater(c.messages) } : c))
     );
@@ -133,8 +142,11 @@ export default function Home() {
     const text = draft.trim();
     if (!text || !activeChat || isThinking) return;
 
-    const userMsg = { id: nextId(), role: 'user', text };
-    updateChatMessages(activeChat.id, (msgs) => [...msgs, userMsg]);
+    const userMsg: MessageItem = { id: nextId(), role: 'user', text };
+    const agentMsgId = nextId();
+    const agentMsg: MessageItem = { id: agentMsgId, role: 'agent', text: '', citations: [] };
+
+    updateChatMessages(activeChat.id, (msgs) => [...msgs, userMsg, agentMsg]);
 
     // rename chat on first real user message
     setChats((prev) =>
@@ -145,30 +157,72 @@ export default function Home() {
       )
     );
 
+    // Construct multi-turn history from current chat session
+    const historyPayload = activeChat.messages
+      .filter((m) => m.text && m.text.trim())
+      .map((m) => ({
+        role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant',
+        content: m.text,
+      }));
+
     setDraft('');
     setIsThinking(true);
 
     try {
-      const response: QueryResponse = await sendQuery(
+      await sendQueryStream(
         text,
+        historyPayload,
         selectedBookFilter || undefined,
-        model
+        model,
+        (token) => {
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === activeChat.id
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === agentMsgId ? { ...m, text: m.text + token } : m
+                    ),
+                  }
+                : c
+            )
+          );
+        },
+        (citations) => {
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === activeChat.id
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === agentMsgId ? { ...m, citations } : m
+                    ),
+                  }
+                : c
+            )
+          );
+        }
       );
-
-      const reply = {
-        id: nextId(),
-        role: 'agent',
-        text: response.answer,
-        citations: response.citations || [],
-      };
-      updateChatMessages(activeChat.id, (msgs) => [...msgs, reply]);
     } catch (err: any) {
-      const errReply = {
-        id: nextId(),
-        role: 'agent',
-        text: `⚠️ Backend query error: ${err?.response?.data?.detail || err?.message || 'Could not connect to FastAPI API at port 8000.'}`,
-      };
-      updateChatMessages(activeChat.id, (msgs) => [...msgs, errReply]);
+      setChats((prev) =>
+        prev.map((c) =>
+          c.id === activeChat.id
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === agentMsgId
+                    ? {
+                        ...m,
+                        text: m.text
+                          ? m.text + `\n\n⚠️ Streaming error: ${err?.message || 'Error occurred.'}`
+                          : `⚠️ Backend query error: ${err?.response?.data?.detail || err?.message || 'Could not connect to FastAPI API at port 8000.'}`,
+                      }
+                    : m
+                ),
+              }
+            : c
+        )
+      );
     } finally {
       setIsThinking(false);
     }
@@ -237,15 +291,6 @@ export default function Home() {
                 <span>source pdfs</span>
                 <span style={styles.countBadge}>{documents.length}</span>
               </button>
-
-              <button
-                style={styles.smallUploadBtn}
-                onClick={() => setIsUploadModalOpen(true)}
-                title="Upload PDF Textbook"
-              >
-                <Upload size={12} />
-                <span style={{ marginLeft: 3 }}>Upload</span>
-              </button>
             </div>
 
             {pdfOpen && (
@@ -265,11 +310,11 @@ export default function Home() {
                   <div style={styles.emptyPdfHint}>no pdfs ingested yet</div>
                 ) : (
                   documents.map((pdf) => {
-                    const title = pdf.book_title || pdf.file_name;
+                    const title = pdf.book_title || pdf.filename;
                     const isSelected = selectedBookFilter === title;
                     return (
                       <div
-                        key={pdf.id}
+                        key={pdf.document_id}
                         style={{
                           ...styles.pdfItem,
                           ...(isSelected ? styles.pdfItemSelected : {}),
@@ -280,16 +325,6 @@ export default function Home() {
                         <FileCode2 size={13} style={{ flexShrink: 0, opacity: 0.8, color: COLORS.green }} />
                         <span style={styles.pdfName}>{title}</span>
                         <span style={styles.pdfPages}>{pdf.total_pages ? `${pdf.total_pages}p` : ''}</span>
-                        <button
-                          style={styles.pdfDeleteBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteDoc(pdf.id);
-                          }}
-                          title="Delete document"
-                        >
-                          <Trash2 size={12} />
-                        </button>
                       </div>
                     );
                   })
@@ -400,16 +435,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Upload Modal */}
-      {isUploadModalOpen && (
-        <UploadModal
-          isOpen={isUploadModalOpen}
-          onClose={() => {
-            setIsUploadModalOpen(false);
-            loadDocuments();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -846,10 +871,10 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
   },
   messagesInner: {
-    maxWidth: 960,
+    maxWidth: 1150,
     width: '100%',
     margin: '0 auto',
-    padding: '24px 24px 16px',
+    padding: '24px 28px 16px',
     display: 'flex',
     flexDirection: 'column',
     gap: 18,
@@ -873,11 +898,11 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   bubble: {
-    maxWidth: '88%',
+    maxWidth: '95%',
     padding: '12px 16px',
     borderRadius: 8,
-    fontSize: 14.5,
-    lineHeight: 1.55,
+    fontSize: 15.5,
+    lineHeight: 1.6,
     boxSizing: 'border-box',
     overflowWrap: 'break-word',
     wordBreak: 'break-word',
@@ -891,7 +916,8 @@ const styles: Record<string, React.CSSProperties> = {
   bubbleAgent: {
     background: COLORS.panel,
     border: `1px solid ${COLORS.border}`,
-    color: COLORS.wheat,
+    color: '#f3f4f6',
+    padding: '16px 26px 16px 36px',
   },
 
   citationContainer: {

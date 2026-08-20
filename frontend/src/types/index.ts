@@ -9,8 +9,14 @@ export interface Citation {
   similarity_score: number;
 }
 
+export interface ChatHistoryItem {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface QueryRequest {
   query: string;
+  history?: ChatHistoryItem[];
   subject_filter?: string;
   book_filter?: string;
   model_name?: string;

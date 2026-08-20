@@ -10,9 +10,20 @@ interface MathMarkdownProps {
   className?: string;
 }
 
+const preprocessLaTeX = (text: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/\\\[\s*/g, '\n$$\n')
+    .replace(/\s*\\\]/g, '\n$$\n')
+    .replace(/\\\(\s*/g, '$')
+    .replace(/\s*\\\)/g, '$');
+};
+
 export const MathMarkdown: React.FC<MathMarkdownProps> = ({ content, className = '' }) => {
+  const formattedContent = preprocessLaTeX(content);
+
   return (
-    <div className={`prose prose-invert max-w-none text-[#e9dfc4] leading-relaxed break-words overflow-hidden ${className}`}>
+    <div className={`prose prose-invert max-w-none text-[#f3f4f6] text-[15.5px] leading-relaxed break-words overflow-hidden ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
@@ -20,7 +31,7 @@ export const MathMarkdown: React.FC<MathMarkdownProps> = ({ content, className =
           code({ node, inline, className, children, ...props }: any) {
             return (
               <code
-                className={`${className || ''} bg-[#070b08] px-1.5 py-0.5 rounded text-[#8fbf76] font-mono text-sm border border-[#1c2620] break-all`}
+                className={`${className || ''} bg-[#070b08] px-1.5 py-0.5 rounded text-[#a9d98c] font-mono text-sm border border-[#1c2620] break-all`}
                 {...props}
               >
                 {children}
@@ -28,26 +39,29 @@ export const MathMarkdown: React.FC<MathMarkdownProps> = ({ content, className =
             );
           },
           p({ children }) {
-            return <p className="mb-3 leading-7 text-[#e9dfc4] break-words max-w-full">{children}</p>;
+            return <p className="mb-3.5 leading-7 text-[#f3f4f6] text-[15.5px] break-words max-w-full">{children}</p>;
           },
           h1({ children }) {
-            return <h1 className="text-xl font-bold font-mono text-[#8fbf76] mt-4 mb-2 break-words">{children}</h1>;
+            return <h1 className="text-2xl font-bold font-mono text-[#a9d98c] mt-5 mb-2.5 break-words">{children}</h1>;
           },
           h2({ children }) {
-            return <h2 className="text-lg font-bold font-mono text-[#8fbf76] mt-3 mb-2 break-words">{children}</h2>;
+            return <h2 className="text-xl font-bold font-mono text-[#a9d98c] mt-4 mb-2 break-words">{children}</h2>;
           },
           h3({ children }) {
-            return <h3 className="text-base font-semibold font-mono text-[#a9d98c] mt-2 mb-1 break-words">{children}</h3>;
+            return <h3 className="text-lg font-semibold font-mono text-[#bdf09b] mt-3 mb-1.5 break-words">{children}</h3>;
           },
           ul({ children }) {
-            return <ul className="list-disc list-inside space-y-1 my-2 text-[#b8ae93] break-words">{children}</ul>;
+            return <ul className="list-disc list-outside pl-6 space-y-2 my-3 text-[#e5e7eb] text-[15px] break-words">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="list-decimal list-inside space-y-1 my-2 text-[#b8ae93] break-words">{children}</ol>;
+            return <ol className="list-decimal list-outside pl-6 space-y-2 my-3 text-[#e5e7eb] text-[15px] break-words">{children}</ol>;
+          },
+          li({ children }) {
+            return <li className="pl-1 leading-relaxed mb-1">{children}</li>;
           },
         }}
       >
-        {content}
+        {formattedContent}
       </ReactMarkdown>
     </div>
   );
