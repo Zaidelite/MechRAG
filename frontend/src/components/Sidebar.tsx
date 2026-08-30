@@ -68,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Sparkles size={14} className="text-[#8fbf76]" />
             </div>
             <span className="font-mono font-bold text-base text-[#8fbf76] tracking-tight">MechRAG</span>
-            <span className="font-mono text-[10.5px] text-[#6d7a70]">v1.2.6</span>
+            <span className="font-mono text-[10.5px] text-[#6d7a70]">v1.2.7</span>
           </div>
         )}
 
