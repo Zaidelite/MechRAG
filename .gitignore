@@ -24,9 +24,7 @@ backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 backend/data/chroma_db/*
 !backend/data/chroma_db/.gitkeep
-backend/data/metadata.db
-*.db
-*.pdf
+!backend/data/metadata.db
 Mech_RAG_pdfs/
 !tests/sample_pdfs/.gitkeep
 tests/test_chroma_db/

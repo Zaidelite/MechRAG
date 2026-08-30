@@ -271,7 +271,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.2.5</span>
+              <span style={styles.sidebarBrandVersion}>v1.2.6</span>
             </div>
           )}
 
@@ -390,7 +390,7 @@ export default function Home() {
         <div style={styles.header}>
           <div style={styles.headerTitleRow}>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.2.5</span>
+            <span style={styles.headerVersion}>v1.2.6</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {selectedBookFilter && (
