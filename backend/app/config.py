@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    PINECONE_API_KEY: str = ""
+    PINECONE_INDEX_NAME: str = "mech-rag"
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
 

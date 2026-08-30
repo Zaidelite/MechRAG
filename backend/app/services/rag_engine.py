@@ -65,10 +65,14 @@ class RAGEngine:
 
         # 0. Deduplication check
         existing = find_by_hash(sha256)
-        chroma_check = self.retriever.vector_store.get(where={"filename": filename})
-        has_chroma_vectors = bool(chroma_check and chroma_check.get("ids"))
+        has_vectors = False
+        if hasattr(self.retriever.vector_store, "get"):
+            v_check = self.retriever.vector_store.get(where={"filename": filename})
+            has_vectors = bool(v_check and v_check.get("ids"))
+        else:
+            has_vectors = True  # Cloud vector store (Pinecone)
 
-        if existing and existing.get("status") == "done" and has_chroma_vectors and not force_reindex:
+        if existing and existing.get("status") == "done" and has_vectors and not force_reindex:
             return {
                 "document_id": existing["document_id"],
                 "filename": filename,

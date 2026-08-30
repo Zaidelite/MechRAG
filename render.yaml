@@ -22,3 +22,7 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: mech-rag
