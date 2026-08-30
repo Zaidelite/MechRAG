@@ -298,7 +298,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.3.0</span>
+              <span style={styles.sidebarBrandVersion}>v1.3.1</span>
             </div>
           )}
 
@@ -379,6 +379,33 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {!collapsed && <div style={styles.sidebarDivider} />}
+
+        {/* Bottom Section: Recent Chats for Desktop */}
+        {!collapsed && (
+          <div style={{ ...styles.sidebarSection, flex: 1, minHeight: 0 }}>
+            <div style={styles.sectionLabel}>recent (session only)</div>
+            <div style={styles.chatList}>
+              {chats.map((c) => {
+                const isActive = c.id === activeChatId;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveChatId(c.id)}
+                    style={{
+                      ...styles.chatItem,
+                      ...(isActive ? styles.chatItemActive : {}),
+                    }}
+                  >
+                    <MessageSquare size={13} style={{ flexShrink: 0, opacity: 0.7, color: isActive ? COLORS.greenBright : COLORS.wheatDim }} />
+                    <span style={styles.chatItemText}>{c.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ---------------- Mobile Slide-Over Drawer ---------------- */}
@@ -391,7 +418,7 @@ export default function Home() {
                   <Sparkles size={14} style={{ color: COLORS.green }} />
                 </div>
                 <span style={styles.sidebarBrandTitle}>MechRAG</span>
-                <span style={styles.sidebarBrandVersion}>v1.3.0</span>
+                <span style={styles.sidebarBrandVersion}>v1.3.1</span>
               </div>
               <button
                 style={styles.squareIconBtn}
@@ -511,7 +538,7 @@ export default function Home() {
               <PanelLeft size={18} />
             </button>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.3.0</span>
+            <span style={styles.headerVersion}>v1.3.1</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {selectedBookFilter && (
@@ -697,8 +724,10 @@ const COLORS = {
 const styles: Record<string, React.CSSProperties> = {
   app: {
     display: 'flex',
-    height: '100vh',
+    height: '100dvh',
+    maxHeight: '100dvh',
     width: '100%',
+    overflow: 'hidden',
     background: COLORS.bg,
     fontFamily: "'Inter', system-ui, sans-serif",
     color: COLORS.wheat,
@@ -711,6 +740,8 @@ const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     display: 'flex',
     flexDirection: 'column',
+    height: '100%',
+    maxHeight: '100dvh',
     background: COLORS.sidebarBg,
     borderRight: `1px solid ${COLORS.border}`,
     transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1012,7 +1043,10 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    height: '100%',
+    maxHeight: '100dvh',
     minWidth: 0,
+    overflow: 'hidden',
   },
   header: {
     display: 'flex',
@@ -1074,16 +1108,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   messages: {
     flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
   },
   messagesInner: {
     maxWidth: 1000,
     width: '100%',
     margin: '0 auto',
-    padding: '20px 20px 24px',
+    padding: '16px 16px 20px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 22,
+    gap: 20,
     boxSizing: 'border-box',
   },
   msgRow: {
@@ -1225,10 +1260,11 @@ const styles: Record<string, React.CSSProperties> = {
   // input
   inputBar: {
     borderTop: `1px solid ${COLORS.border}`,
-    padding: '10px 16px 16px',
+    padding: '8px 12px calc(8px + env(safe-area-inset-bottom, 0px))',
     flexShrink: 0,
-    background: 'rgba(10, 15, 12, 0.95)',
-    backdropFilter: 'blur(10px)',
+    background: 'rgba(10, 15, 12, 0.98)',
+    backdropFilter: 'blur(12px)',
+    zIndex: 20,
   },
   inputWrap: {
     maxWidth: 900,
