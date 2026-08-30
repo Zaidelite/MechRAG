@@ -78,28 +78,33 @@ MechRAG/
 
 ## Coding conventions
 - **Explicit Instruction Required**: Do NOT implement or change code until the user explicitly instructs/asks to do so.
+- **Version Bumps on Every Push**: Always increment the project version (SemVer `MAJOR.MINOR.PATCH`, e.g. `v1.2.3`) across `backend/app/main.py`, `frontend/package.json`, `frontend/src/app/page.tsx`, and `frontend/src/components/Sidebar.tsx` whenever fixes, optimizations, or features are pushed.
 - **LangChain First Architecture**: Build all RAG pipelines, loaders, text splitters, vectorstores, and chains using LangChain standard abstractions (`Document`, `BaseRetriever`, `RunnableSequence` / LCEL).
 - **NO GOD FILES**: All backend business logic MUST remain strictly decoupled inside single-responsibility modules in `backend/app/services/`.
 - **LaTeX Math Rules**: Preserve raw LaTeX formatting (`$...$`, `$$...$$`) during text extraction and force LLM responses to use valid LaTeX syntax for equations.
 - **Traceable Citations**: Every RAG answer payload must include structured citation metadata (Book Title, Chapter, Page Number, Text Snippet).
 - **Non-Blocking Ingestion**: `upload.py` MUST NOT run parsing/chunking/embedding synchronously on the request thread. Enqueue via `BackgroundTasks` and return `202 Accepted` with a `document_id` immediately.
 - **Idempotent Ingestion**: Compute SHA256 checksum and check `metadata.db` before re-embedding files.
+- **Ultra-Low Memory Local Embeddings**: Use quantized ONNX `fastembed` for CPU embeddings to maintain `<30MB` RAM usage and ensure stability on free-tier cloud containers (Render 512MB RAM).
 
 ---
 
 ## Progress & Completed Milestone Tasks
 - [x] **Task 0: SQLite Metadata Store (`indexing_state.py` & `metadata.db`)** - Hash deduplication and state transitions (`pending` → `parsing` → `embedding` → `done`).
 - [x] **Task 1: PDF Parser & Chunker (`parser.py` & `chunker.py`)** - PyMuPDF fast LaTeX character normalizer and 800-token `RecursiveCharacterTextSplitter`.
-- [x] **Task 2: Embeddings & Vector Storage (`embedder.py` & `retriever.py`)** - Local `HuggingFaceEmbeddings("BAAI/bge-small-en-v1.5")` & persistent ChromaDB vector store.
+- [x] **Task 2: Embeddings & Vector Storage (`embedder.py` & `retriever.py`)** - ONNX FastEmbed + local `BAAI/bge-small-en-v1.5` & persistent ChromaDB vector store.
 - [x] **Task 3: Reranker, LLM & RAG Orchestrator (`reranker.py`, `prompt_builder.py`, `llm.py`, `rag_engine.py`)** - Hybrid BM25 + RRF reranking, Google Gemini 2.5 Flash, and traceable citation formatter.
 - [x] **Task 4: Production FastAPI Routers (`upload.py`, `status.py`, `query.py`, `documents.py`)** - Non-blocking async upload, status polling endpoint, RAG query endpoint, and document library purge endpoint.
 - [x] **Task 5: Interactive Next.js Frontend Web UI (`frontend/`)** - KaTeX zero-flicker LaTeX renderer, slide-over citation drawer, upload status polling modal, and dark glassmorphic dashboard.
+- [x] **Task 6: Adaptive Query Intent Router (`query_router.py`)** - Zero-latency heuristic bypass for greetings, follow-ups, and chit-chat without unnecessary vector retrieval.
+- [x] **Task 7: Multi-Model Provider Integration** - Full support for Groq LPUs (`groq/compound`, `openai/gpt-oss-120b`, `qwen/qwen3.6-27b`) and Google Gemini models.
+- [x] **Task 8: Production Cloud Deployment & CI/CD** - Render Docker backend deployment with CPU memory optimizations + Vercel Next.js edge frontend + GitHub Actions pipeline.
 
 ---
 
 ## Future / Next Phase Tasks
 - [ ] **Session-based PDF Upload & Ephemeral Vector Store** (Isolated in-memory uploads without permanent VDB mutation).
 - [ ] **Enhance frontend design & visual aesthetics** (animations, themes, micro-interactions).
-- [ ] **Deploy platform to web hosting / cloud infrastructure.**
+- [ ] **Real-time document citation page highlighting & PDF preview pane.**
 
 
