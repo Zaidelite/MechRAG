@@ -68,6 +68,7 @@ let idCounter = 1;
 const nextId = () => `m_${idCounter++}`;
 
 export default function Home() {
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(true);
 
@@ -83,12 +84,9 @@ export default function Home() {
   const [draft, setDraft] = useState('');
   const [isThinking, setIsThinking] = useState(false);
 
-  // Models from backend or default
-  const [availableModels, setAvailableModels] = useState(MODELS);
-  const [model, setModel] = useState(MODELS[0].id);
-
-  // Upload Modal
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  // Models from backend
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
+  const [model, setModel] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -98,11 +96,11 @@ export default function Home() {
   const loadDocuments = async () => {
     try {
       const res = await listDocuments();
-      if (res && res.documents) {
+      if (res && Array.isArray(res.documents)) {
         setDocuments(res.documents);
       }
-    } catch (e) {
-      console.error('Failed to load documents:', e);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
     }
   };
 
@@ -110,142 +108,171 @@ export default function Home() {
     try {
       const res = await fetchAvailableModels();
       if (res && res.models && res.models.length > 0) {
-        const formatted = res.models.map((m) => ({ id: m.id, label: m.name }));
-        setAvailableModels(formatted);
-        setModel((prev) => (formatted.some((f) => f.id === prev) ? prev : formatted[0].id));
+        setAvailableModels(res.models);
+        setModel(res.models[0].id);
       }
-    } catch (e) {
-      console.error('Failed to load models:', e);
+    } catch (err) {
+      console.error('Failed to load available models:', err);
     }
   };
 
   useEffect(() => {
     loadDocuments();
     loadModels();
-
-    // Auto-retry polling once after 2.5s in case backend was warming up
-    const timer = setTimeout(() => {
-      loadDocuments();
-      loadModels();
-    }, 2500);
-
-    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [activeChat?.messages, isThinking]);
 
-  const updateChatMessages = (chatId: string, updater: (msgs: MessageItem[]) => MessageItem[]) => {
-    setChats((prev) =>
-      prev.map((c) => (c.id === chatId ? { ...c, messages: updater(c.messages) } : c))
-    );
-  };
-
+  // Handle new chat creation
   const handleNewChat = () => {
-    const id = `c_${nextId()}`;
-    setChats((prev) => [{ id, title: 'New chat', messages: [WELCOME] }, ...prev]);
-    setActiveChatId(id);
-    setDraft('');
+    const newId = `c${chats.length + 1}`;
+    const newChat = {
+      id: newId,
+      title: 'New chat',
+      messages: [WELCOME],
+    };
+    setChats((prev) => [newChat, ...prev]);
+    setActiveChatId(newId);
   };
 
-  const handleDeleteDoc = async (docId: string) => {
-    if (!confirm('Remove textbook from vector store?')) return;
-    try {
-      await deleteDocument(docId);
-      await loadDocuments();
-    } catch (e) {
-      console.error('Failed to delete document:', e);
-    }
-  };
-
+  // Handle sending message with token streaming
   const handleSend = async () => {
-    const text = draft.trim();
-    if (!text || !activeChat || isThinking) return;
+    if (!draft.trim() || isThinking) return;
 
-    const userMsg: MessageItem = { id: nextId(), role: 'user', text };
+    const userQuery = draft.trim();
+    setDraft('');
+
+    const userMsg: MessageItem = {
+      id: nextId(),
+      role: 'user',
+      text: userQuery,
+    };
+
     const agentMsgId = nextId();
-    const agentMsg: MessageItem = { id: agentMsgId, role: 'agent', text: '', citations: [] };
+    const agentPlaceholder: MessageItem = {
+      id: agentMsgId,
+      role: 'agent',
+      text: '',
+      citations: [],
+    };
 
-    updateChatMessages(activeChat.id, (msgs) => [...msgs, userMsg, agentMsg]);
-
-    // rename chat on first real user message
+    // Update active chat with user msg and agent placeholder
     setChats((prev) =>
-      prev.map((c) =>
-        c.id === activeChat.id && c.title === 'New chat'
-          ? { ...c, title: text.slice(0, 42) + (text.length > 42 ? '…' : '') }
-          : c
-      )
+      prev.map((c) => {
+        if (c.id === activeChatId) {
+          const isFirstQuery = c.messages.length <= 1;
+          const newTitle = isFirstQuery ? userQuery.slice(0, 26) : c.title;
+          return {
+            ...c,
+            title: newTitle,
+            messages: [...c.messages, userMsg, agentPlaceholder],
+          };
+        }
+        return c;
+      })
     );
 
-    // Construct multi-turn history from current chat session (exclude welcome prompt and empty messages)
-    const historyPayload = activeChat.messages
-      .filter((m) => m.id !== 'welcome' && m.text && m.text.trim())
-      .map((m) => ({
-        role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant',
-        content: m.text,
-      }));
-
-    setDraft('');
     setIsThinking(true);
 
     try {
+      // Build conversation history excluding the welcome message
+      const historyPayload = (activeChat?.messages || [])
+        .filter((m) => m.id !== 'welcome' && m.text && m.text.trim())
+        .map((m) => ({
+          role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant',
+          content: m.text,
+        }));
+
+      // Stream response from backend
       await sendQueryStream(
-        text,
+        userQuery,
         historyPayload,
         selectedBookFilter || undefined,
         model,
-        (token) => {
+        (token: string) => {
+          setIsThinking(false);
           setChats((prev) =>
-            prev.map((c) =>
-              c.id === activeChat.id
-                ? {
-                    ...c,
-                    messages: c.messages.map((m) =>
-                      m.id === agentMsgId ? { ...m, text: m.text + token } : m
-                    ),
-                  }
-                : c
-            )
+            prev.map((c) => {
+              if (c.id === activeChatId) {
+                return {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === agentMsgId ? { ...m, text: m.text + token } : m
+                  ),
+                };
+              }
+              return c;
+            })
           );
         },
-        (citations) => {
+        (citations: Citation[]) => {
           setChats((prev) =>
-            prev.map((c) =>
-              c.id === activeChat.id
-                ? {
-                    ...c,
-                    messages: c.messages.map((m) =>
-                      m.id === agentMsgId ? { ...m, citations } : m
-                    ),
-                  }
-                : c
-            )
+            prev.map((c) => {
+              if (c.id === activeChatId) {
+                return {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === agentMsgId ? { ...m, citations } : m
+                  ),
+                };
+              }
+              return c;
+            })
           );
         }
       );
-    } catch (err: any) {
-      setChats((prev) =>
-        prev.map((c) =>
-          c.id === activeChat.id
-            ? {
+    } catch (err) {
+      console.error('Query failed, trying standard endpoint:', err);
+      try {
+        const historyPayload = (activeChat?.messages || [])
+          .filter((m) => m.id !== 'welcome' && m.text && m.text.trim())
+          .map((m) => ({
+            role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant',
+            content: m.text,
+          }));
+
+        const res: QueryResponse = await sendQuery(
+          userQuery,
+          historyPayload,
+          selectedBookFilter || undefined,
+          model
+        );
+
+        setChats((prev) =>
+          prev.map((c) => {
+            if (c.id === activeChatId) {
+              return {
                 ...c,
                 messages: c.messages.map((m) =>
                   m.id === agentMsgId
-                    ? {
-                        ...m,
-                        text: m.text
-                          ? m.text + `\n\n⚠️ Streaming error: ${err?.message || 'Error occurred.'}`
-                          : `⚠️ Backend query error: ${err?.response?.data?.detail || err?.message || 'Could not connect to FastAPI API at port 8000.'}`,
-                      }
+                    ? { ...m, text: res.answer, citations: res.citations }
                     : m
                 ),
-              }
-            : c
-        )
-      );
+              };
+            }
+            return c;
+          })
+        );
+      } catch (fallbackErr) {
+        console.error('Fallback query also failed:', fallbackErr);
+        setChats((prev) =>
+          prev.map((c) => {
+            if (c.id === activeChatId) {
+              return {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === agentMsgId
+                    ? { ...m, text: '⚠️ Connection error. Please check backend connection.' }
+                    : m
+                ),
+              };
+            }
+            return c;
+          })
+        );
+      }
     } finally {
       setIsThinking(false);
     }
@@ -261,8 +288,8 @@ export default function Home() {
   return (
     <div style={styles.app}>
 
-      {/* ---------------- sidebar (side view) ---------------- */}
-      <aside style={{ ...styles.sidebar, width: collapsed ? 60 : 290 }}>
+      {/* ---------------- Desktop Sidebar (Permanent/Collapsible) ---------------- */}
+      <aside className="desktop-only" style={{ ...styles.sidebar, width: collapsed ? 60 : 290 }}>
         {/* Top Header & Collapse Toggle */}
         <div style={collapsed ? styles.sidebarTopCollapsed : styles.sidebarTop}>
           {!collapsed && (
@@ -271,7 +298,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.2.9</span>
+              <span style={styles.sidebarBrandVersion}>v1.3.0</span>
             </div>
           )}
 
@@ -329,10 +356,94 @@ export default function Home() {
                   <span style={styles.pdfName}>All Textbooks</span>
                 </div>
 
-                {documents.length === 0 ? (
-                  <div style={styles.emptyPdfHint}>no pdfs ingested yet</div>
-                ) : (
-                  documents.map((pdf) => {
+                {documents.map((pdf) => {
+                  const title = pdf.book_title || pdf.filename;
+                  const isSelected = selectedBookFilter === title;
+                  return (
+                    <div
+                      key={pdf.document_id}
+                      style={{
+                        ...styles.pdfItem,
+                        ...(isSelected ? styles.pdfItemSelected : {}),
+                      }}
+                      onClick={() => setSelectedBookFilter(isSelected ? null : title)}
+                      title={title}
+                    >
+                      <FileCode2 size={13} style={{ flexShrink: 0, opacity: 0.8, color: COLORS.green }} />
+                      <span style={styles.pdfName}>{title}</span>
+                      <span style={styles.pdfPages}>{pdf.total_pages ? `${pdf.total_pages}p` : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </aside>
+
+      {/* ---------------- Mobile Slide-Over Drawer ---------------- */}
+      {mobileSidebarOpen && (
+        <div style={styles.mobileBackdrop} onClick={() => setMobileSidebarOpen(false)}>
+          <aside style={styles.mobileDrawer} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sidebarTop}>
+              <div style={styles.sidebarBrandRow}>
+                <div style={styles.brandBadgeIcon}>
+                  <Sparkles size={14} style={{ color: COLORS.green }} />
+                </div>
+                <span style={styles.sidebarBrandTitle}>MechRAG</span>
+                <span style={styles.sidebarBrandVersion}>v1.3.0</span>
+              </div>
+              <button
+                style={styles.squareIconBtn}
+                onClick={() => setMobileSidebarOpen(false)}
+                title="Close sidebar"
+              >
+                <PanelLeftClose size={18} />
+              </button>
+            </div>
+
+            <div style={styles.newChatWrap}>
+              <button
+                style={styles.newChatBtn}
+                onClick={() => {
+                  handleNewChat();
+                  setMobileSidebarOpen(false);
+                }}
+              >
+                <Plus size={15} strokeWidth={2} />
+                <span>new chat</span>
+              </button>
+            </div>
+
+            <div style={styles.sidebarDivider} />
+
+            <div style={styles.sidebarSection}>
+              <div style={styles.sectionHeaderRow}>
+                <button style={styles.sectionHeader} onClick={() => setPdfOpen((v) => !v)}>
+                  {pdfOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <FileText size={13} style={{ color: COLORS.green }} />
+                  <span>source pdfs</span>
+                  <span style={styles.countBadge}>{documents.length}</span>
+                </button>
+              </div>
+
+              {pdfOpen && (
+                <div style={styles.pdfList}>
+                  <div
+                    style={{
+                      ...styles.pdfItem,
+                      ...(selectedBookFilter === null ? styles.pdfItemSelected : {}),
+                    }}
+                    onClick={() => {
+                      setSelectedBookFilter(null);
+                      setMobileSidebarOpen(false);
+                    }}
+                  >
+                    <BookOpen size={13} style={{ flexShrink: 0, color: COLORS.green }} />
+                    <span style={styles.pdfName}>All Textbooks</span>
+                  </div>
+
+                  {documents.map((pdf) => {
                     const title = pdf.book_title || pdf.filename;
                     const isSelected = selectedBookFilter === title;
                     return (
@@ -342,57 +453,67 @@ export default function Home() {
                           ...styles.pdfItem,
                           ...(isSelected ? styles.pdfItemSelected : {}),
                         }}
-                        onClick={() => setSelectedBookFilter(isSelected ? null : title)}
+                        onClick={() => {
+                          setSelectedBookFilter(isSelected ? null : title);
+                          setMobileSidebarOpen(false);
+                        }}
                         title={title}
                       >
                         <FileCode2 size={13} style={{ flexShrink: 0, opacity: 0.8, color: COLORS.green }} />
                         <span style={styles.pdfName}>{title}</span>
-                        <span style={styles.pdfPages}>{pdf.total_pages ? `${pdf.total_pages}p` : ''}</span>
                       </div>
                     );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!collapsed && <div style={styles.sidebarDivider} />}
-
-        {/* Bottom Section: Recent Chats */}
-        {!collapsed && (
-          <div style={{ ...styles.sidebarSection, flex: 1, minHeight: 0 }}>
-            <div style={styles.sectionLabel}>recent (session only)</div>
-            <div style={styles.chatList}>
-              {chats.map((c) => {
-                const isActive = c.id === activeChatId;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setActiveChatId(c.id)}
-                    style={{
-                      ...styles.chatItem,
-                      ...(isActive ? styles.chatItemActive : {}),
-                    }}
-                  >
-                    <MessageSquare size={13} style={{ flexShrink: 0, opacity: 0.7, color: isActive ? COLORS.greenBright : COLORS.wheatDim }} />
-                    <span style={styles.chatItemText}>{c.title}</span>
-                  </button>
-                );
-              })}
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </aside>
+
+            <div style={styles.sidebarDivider} />
+
+            <div style={{ ...styles.sidebarSection, flex: 1, minHeight: 0 }}>
+              <div style={styles.sectionLabel}>recent (session only)</div>
+              <div style={styles.chatList}>
+                {chats.map((c) => {
+                  const isActive = c.id === activeChatId;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setActiveChatId(c.id);
+                        setMobileSidebarOpen(false);
+                      }}
+                      style={{
+                        ...styles.chatItem,
+                        ...(isActive ? styles.chatItemActive : {}),
+                      }}
+                    >
+                      <MessageSquare size={13} style={{ flexShrink: 0, opacity: 0.7, color: isActive ? COLORS.greenBright : COLORS.wheatDim }} />
+                      <span style={styles.chatItemText}>{c.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* ---------------- main chat ---------------- */}
       <main style={styles.main}>
         <div style={styles.header}>
           <div style={styles.headerTitleRow}>
+            <button
+              className="mobile-only"
+              style={styles.mobileMenuBtn}
+              onClick={() => setMobileSidebarOpen(true)}
+              title="Open library & history"
+            >
+              <PanelLeft size={18} />
+            </button>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.2.9</span>
+            <span style={styles.headerVersion}>v1.3.0</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {selectedBookFilter && (
               <span style={styles.filterBadge}>
                 <BookOpen size={11} /> {selectedBookFilter}
@@ -406,9 +527,9 @@ export default function Home() {
               title="Join our Discord community"
             >
               <DiscordIcon size={13} />
-              <span>Join Discord</span>
+              <span className="desktop-only">Join Discord</span>
             </a>
-            <span style={styles.headerDim}>session active</span>
+            <span className="desktop-only" style={styles.headerDim}>session active</span>
           </div>
         </div>
 
@@ -422,12 +543,9 @@ export default function Home() {
                 citations={m.citations}
               />
             ))}
-            {isThinking &&
-              (!activeChat?.messages.length ||
-                activeChat.messages[activeChat.messages.length - 1]?.role !== 'agent' ||
-                !activeChat.messages[activeChat.messages.length - 1]?.text) && (
-                <ThinkingBubble />
-              )}
+            {isThinking && (
+              <ThinkingBubble />
+            )}
           </div>
         </div>
 
@@ -443,7 +561,7 @@ export default function Home() {
                 >
                   {availableModels.map((m) => (
                     <option key={m.id} value={m.id} style={{ background: COLORS.panel }}>
-                      {m.label}
+                      {m.name}
                     </option>
                   ))}
                 </select>
@@ -451,7 +569,6 @@ export default function Home() {
             </div>
 
             <div style={styles.inputInner}>
-              <span style={styles.prompt}>{'>'}</span>
               <textarea
                 style={styles.textarea}
                 rows={1}
@@ -492,8 +609,12 @@ function Message({
   const [expandedPassages, setExpandedPassages] = useState(false);
 
   return (
-    <div style={{ ...styles.msgRow, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-      {!isUser && <div style={styles.agentTag}>agent</div>}
+    <div
+      style={{
+        ...styles.msgRow,
+        justifyContent: isUser ? 'flex-end' : 'flex-start',
+      }}
+    >
       <div
         style={{
           ...styles.bubble,
@@ -502,7 +623,7 @@ function Message({
       >
         <MathMarkdown content={text} />
 
-        {/* Clean expandable passages section directly inside agent message bubble */}
+        {/* Clean expandable passages section directly inside agent message */}
         {!isUser && citations && citations.length > 0 && (
           <div style={styles.citationContainer}>
             <div style={styles.citationHeaderRow}>
@@ -518,23 +639,18 @@ function Message({
               </button>
             </div>
 
-            {/* Inline Passages Accordion */}
             {expandedPassages && (
               <div style={styles.passagesList}>
                 {citations.map((cit, idx) => (
                   <div key={idx} style={styles.passageCard}>
                     <div style={styles.passageMetaRow}>
                       <span style={styles.passageBookTag}>
-                        <BookOpen size={11} /> {cit.book_title}
+                        <BookOpen size={10} />
+                        {cit.book_title}
                       </span>
                       <span style={styles.passagePageTag}>
                         Page {cit.page_number}
                       </span>
-                      {cit.chapter && (
-                        <span style={styles.passageChapterTag}>
-                          Ch. {cit.chapter}
-                        </span>
-                      )}
                     </div>
                     <div style={styles.passageTextSnippet}>
                       <MathMarkdown content={cit.text_snippet} />
@@ -553,7 +669,6 @@ function Message({
 function ThinkingBubble() {
   return (
     <div style={{ ...styles.msgRow, justifyContent: 'flex-start' }}>
-      <div style={styles.agentTag}>agent</div>
       <div style={{ ...styles.bubble, ...styles.bubbleAgent, ...styles.thinking }}>
         <span style={styles.dot}>●</span>
         <span style={{ ...styles.dot, animationDelay: '0.15s' }}>●</span>
@@ -855,6 +970,43 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
   },
 
+  mobileMenuBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    background: 'rgba(143,191,118,0.08)',
+    border: `1px solid ${COLORS.greenDim}`,
+    borderRadius: 6,
+    color: COLORS.greenBright,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  mobileBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(4px)',
+    zIndex: 50,
+    display: 'flex',
+  },
+  mobileDrawer: {
+    width: 290,
+    maxWidth: '85vw',
+    height: '100%',
+    background: COLORS.sidebarBg,
+    borderRight: `1px solid ${COLORS.border}`,
+    display: 'flex',
+    flexDirection: 'column',
+    overflowY: 'auto',
+    zIndex: 51,
+    boxShadow: '4px 0 24px rgba(0,0,0,0.6)',
+  },
+
   // main
   main: {
     flex: 1,
@@ -866,25 +1018,25 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px 22px',
+    padding: '10px 18px',
     borderBottom: `1px solid ${COLORS.border}`,
     flexShrink: 0,
   },
   headerTitleRow: {
     display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontFamily: "'JetBrains Mono', monospace",
     fontWeight: 700,
-    fontSize: 20,
+    fontSize: 18,
     letterSpacing: 0.3,
     color: COLORS.green,
   },
   headerVersion: {
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11,
+    fontSize: 10.5,
     color: COLORS.textMuted,
   },
   headerDim: {
@@ -896,7 +1048,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '3px 9px',
+    padding: '4px 9px',
     background: 'rgba(88, 101, 242, 0.12)',
     border: '1px solid rgba(88, 101, 242, 0.35)',
     borderRadius: 5,
@@ -925,59 +1077,51 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
   },
   messagesInner: {
-    maxWidth: 1150,
+    maxWidth: 1000,
     width: '100%',
     margin: '0 auto',
-    padding: '28px 36px 20px',
+    padding: '20px 20px 24px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 26,
+    gap: 22,
     boxSizing: 'border-box',
   },
   msgRow: {
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: 12,
     width: '100%',
     minWidth: 0,
   },
-  agentTag: {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 10,
-    color: COLORS.greenDim,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 4,
-    padding: '2px 6px',
-    marginTop: 4,
-    flexShrink: 0,
-  },
   bubble: {
-    maxWidth: '96%',
-    padding: '12px 18px',
-    borderRadius: 8,
-    fontSize: 15.5,
-    lineHeight: 1.8,
-    letterSpacing: '0.012em',
     boxSizing: 'border-box',
     overflowWrap: 'break-word',
     wordBreak: 'break-word',
     minWidth: 0,
   },
   bubbleUser: {
-    background: 'rgba(143,191,118,0.10)',
-    border: `1px solid ${COLORS.greenDim}`,
-    color: COLORS.greenBright,
-    padding: '12px 18px',
+    maxWidth: '82%',
+    background: 'rgba(143,191,118,0.12)',
+    border: `1px solid rgba(95,138,77,0.35)`,
+    color: '#f1f5f0',
+    padding: '10px 16px',
+    borderRadius: '18px 18px 4px 18px',
+    fontSize: 14.5,
+    lineHeight: 1.6,
+    alignSelf: 'flex-end',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
   },
   bubbleAgent: {
-    background: COLORS.panel,
-    border: `1px solid ${COLORS.border}`,
+    width: '100%',
+    maxWidth: '100%',
+    background: 'transparent',
+    border: 'none',
     color: '#f3f4f6',
-    padding: '18px 26px 14px',
+    padding: '2px 0 10px',
+    fontSize: 15,
+    lineHeight: 1.75,
   },
 
   citationContainer: {
-    marginTop: 10,
+    marginTop: 12,
     paddingTop: 8,
     borderTop: `1px solid ${COLORS.border}`,
     display: 'flex',
@@ -1013,7 +1157,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   passageCard: {
-    background: COLORS.sidebarBg,
+    background: COLORS.panel,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 6,
     padding: '10px 12px',
@@ -1044,7 +1188,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   passagePageTag: {
     color: COLORS.wheat,
-    background: COLORS.panel,
+    background: COLORS.bg,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 4,
     padding: '2px 6px',
@@ -1053,7 +1197,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: COLORS.textMuted,
   },
   passageTextSnippet: {
-    background: COLORS.panel,
+    background: COLORS.bg,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 6,
     padding: '8px 10px',
@@ -1070,6 +1214,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: COLORS.wheatDim,
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 12.5,
+    padding: '4px 0',
   },
   dot: {
     color: COLORS.green,
@@ -1080,11 +1225,13 @@ const styles: Record<string, React.CSSProperties> = {
   // input
   inputBar: {
     borderTop: `1px solid ${COLORS.border}`,
-    padding: '12px 20px 20px',
+    padding: '10px 16px 16px',
     flexShrink: 0,
+    background: 'rgba(10, 15, 12, 0.95)',
+    backdropFilter: 'blur(10px)',
   },
   inputWrap: {
-    maxWidth: 960,
+    maxWidth: 900,
     width: '100%',
     margin: '0 auto',
     boxSizing: 'border-box',
@@ -1094,7 +1241,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    padding: '0 2px 8px',
+    padding: '0 2px 6px',
   },
   modelSelectWrap: {
     display: 'flex',
@@ -1102,7 +1249,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 6,
-    padding: '4px 8px',
+    padding: '3px 7px',
     background: COLORS.panel,
   },
   modelSelect: {
@@ -1110,25 +1257,19 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     color: COLORS.wheatDim,
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11.5,
+    fontSize: 11,
     cursor: 'pointer',
   },
   inputInner: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: 10,
+    gap: 8,
     background: COLORS.panel,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 8,
-    padding: '10px 12px',
+    padding: '8px 10px',
     width: '100%',
     boxSizing: 'border-box',
-  },
-  prompt: {
-    fontFamily: "'JetBrains Mono', monospace",
-    color: COLORS.green,
-    fontSize: 15,
-    paddingBottom: 2,
   },
   textarea: {
     flex: 1,
@@ -1139,7 +1280,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Inter', system-ui, sans-serif",
     fontSize: 14,
     lineHeight: 1.5,
-    maxHeight: 160,
+    maxHeight: 140,
     overflowWrap: 'break-word',
     wordBreak: 'break-word',
   },
@@ -1151,7 +1292,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: `1px solid ${COLORS.greenDim}`,
     borderRadius: 6,
     color: COLORS.green,
-    padding: 7,
+    padding: '6px 8px',
     cursor: 'pointer',
     flexShrink: 0,
   },
