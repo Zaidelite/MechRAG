@@ -16,10 +16,12 @@ def seed_all_textbooks():
     
     rag_engine = RAGEngine()
     
-    root_dir = BASE_DIR.parent
     pdf_dirs = [
-        root_dir / "Mech_RAG_pdfs",
-        BASE_DIR / "data" / "uploads"
+        BASE_DIR / "Mech_RAG_pdfs",
+        BASE_DIR.parent / "Mech_RAG_pdfs",
+        Path("/app/Mech_RAG_pdfs"),
+        BASE_DIR / "data" / "uploads",
+        Path("/app/data/uploads")
     ]
     
     found_pdfs = []
