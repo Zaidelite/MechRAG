@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, status
 from app.schemas.rag_schemas import QueryRequest, QueryResponse
 from app.routers.upload import rag_engine
 
-router = APIRouter(prefix="/api/v1/query", tags=["Query"])
+router = APIRouter(prefix="/api/v1", tags=["Query"])
 
-@router.post("", response_model=QueryResponse)
+@router.post("/query", response_model=QueryResponse)
+@router.post("/query/", response_model=QueryResponse)
 async def query_rag(request: QueryRequest):
     """
     RAG Search & Chat Endpoint.
@@ -34,7 +35,8 @@ async def query_rag(request: QueryRequest):
 
     return response
 
-@router.post("/stream")
+@router.post("/query/stream")
+@router.post("/query/stream/")
 async def query_rag_stream(request: QueryRequest):
     """
     RAG Search & Chat Streaming Endpoint (Server-Sent Events).
@@ -64,6 +66,7 @@ async def query_rag_stream(request: QueryRequest):
     )
 
 @router.get("/models")
+@router.get("/query/models")
 async def get_models():
     """
     Returns list of all available Gemini text generation models for the active API key.

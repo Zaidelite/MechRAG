@@ -13,7 +13,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Mechanical Engineering RAG Platform API",
     description="Backend API for indexing and querying Mech textbooks with formula & diagram support.",
-    version="1.0.0",
+    version="1.2.0",
+    redirect_slashes=False,
     lifespan=lifespan
 )
 
@@ -34,7 +35,7 @@ app.include_router(documents.router)
 
 @app.get("/")
 async def root():
-    return {"message": "Mech RAG Platform API is running", "version": "1.0.0"}
+    return {"message": "Mech RAG Platform API is running", "version": "1.2.0"}
 
 @app.get("/health")
 async def health_check():

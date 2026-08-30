@@ -7,7 +7,20 @@ import {
   ChatHistoryItem
 } from '../types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+  if (process.env.BACKEND_INTERNAL_URL) {
+    return `${process.env.BACKEND_INTERNAL_URL}/api/v1`;
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  return 'http://localhost:8000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -47,7 +60,9 @@ export const sendQueryStream = async (
     model_name: modelName || undefined,
   };
 
-  const response = await fetch(`${API_BASE_URL}/query/stream`, {
+  const url = typeof window !== 'undefined' ? '/api/v1/query/stream' : `${API_BASE_URL}/query/stream`;
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -68,31 +83,37 @@ export const sendQueryStream = async (
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split('\n\n');
-    buffer = lines.pop() || '';
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
 
-    for (const block of lines) {
-      const line = block.trim();
-      if (!line.startsWith('data: ')) continue;
-      const jsonStr = line.slice(6).trim();
-      if (jsonStr === '[DONE]') break;
+      for (const block of lines) {
+        const line = block.trim();
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') return;
 
-      try {
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.type === 'citations' && Array.isArray(parsed.citations)) {
-          onCitations(parsed.citations);
-        } else if (parsed.type === 'token' && typeof parsed.content === 'string') {
-          onChunk(parsed.content);
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.type === 'citations' && Array.isArray(parsed.citations)) {
+            onCitations(parsed.citations);
+          } else if (parsed.type === 'token' && typeof parsed.content === 'string') {
+            onChunk(parsed.content);
+          }
+        } catch (_) {
+          // ignore single chunk parse errors
         }
-      } catch (e) {
-        console.error('Error parsing SSE json chunk:', e);
       }
     }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch (_) {}
   }
 };
 

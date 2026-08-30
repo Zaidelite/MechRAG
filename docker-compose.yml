@@ -6,16 +6,23 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: mech_rag_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
       - CHROMA_PERSIST_DIR=/app/data/chroma_db
       - UPLOAD_DIR=/app/data/uploads
       - EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
-      - LLM_MODEL=gemini-2.5-flash
+      - LLM_MODEL=groq/compound
+      - HF_HOME=/root/.cache/huggingface
     volumes:
+      - ./backend/app:/app/app
       - ./backend/data:/app/data
+      - ./tests:/app/tests
+      - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
   frontend:
@@ -27,6 +34,13 @@ services:
       - "3001:3001"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - BACKEND_INTERNAL_URL=http://backend:8000
     depends_on:
       - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     restart: unless-stopped
+
+volumes:
+  hf_cache:

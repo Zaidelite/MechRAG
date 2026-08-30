@@ -92,38 +92,49 @@ class LLMService:
         self._clients: Dict[str, Any] = {}
         self._cached_models: Optional[List[Dict[str, str]]] = None
 
+    def _fetch_gemini_models(self) -> List[Dict[str, str]]:
+        if not self.gemini_api_key:
+            return []
+        return [
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Google)", "description": "Google Gemini 2.5 Flash - Fast & Versatile"},
+            {"id": "gemini-3.6-flash", "name": "Gemini 3.6 Flash (Google)", "description": "Google Gemini 3.6 Flash - Advanced Reasoning"},
+            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash (Google)", "description": "Google Gemini 3.5 Flash"},
+            {"id": "gemini-flash-latest", "name": "Gemini Flash Latest (Google)", "description": "Google Gemini Flash Latest"},
+            {"id": "gemini-pro-latest", "name": "Gemini Pro Latest (Google)", "description": "Google Gemini Pro Latest"}
+        ]
+
     def _fetch_groq_models(self) -> List[Dict[str, str]]:
         if not self.groq_api_key:
             return []
-        try:
-            client = Groq(api_key=self.groq_api_key)
-            models_list = client.models.list().data
-            formatted = []
-            for m in models_list:
-                m_id = m.id
-                # Exclude audio/whisper/guard models
-                if any(bad in m_id.lower() for bad in ["whisper", "prompt-guard", "audio", "orpheus"]):
-                    continue
-                clean_name = m_id.split("/")[-1].replace("-", " ").title()
-                formatted.append({
-                    "id": m_id,
-                    "name": f"{clean_name} (Groq)",
-                    "description": f"Groq LPU accelerated model: {m_id}"
-                })
-            return formatted
-        except Exception as e:
-            print("Error fetching Groq models:", e)
-            return [
-                {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 27B (Groq)", "description": "Qwen 3.6 27B model on Groq"},
-                {"id": "openai/gpt-oss-120b", "name": "GPT OSS 120B (Groq)", "description": "GPT OSS 120B model on Groq"}
-            ]
+        return [
+            {"id": "groq/compound", "name": "Compound (Groq)", "description": "Groq Compound LPU Accelerated"},
+            {"id": "groq/compound-mini", "name": "Compound Mini (Groq)", "description": "Groq Compound Mini LPU Accelerated"},
+            {"id": "openai/gpt-oss-120b", "name": "GPT OSS 120B (Groq)", "description": "OpenAI GPT OSS 120B on Groq LPU"},
+            {"id": "openai/gpt-oss-20b", "name": "GPT OSS 20B (Groq)", "description": "OpenAI GPT OSS 20B on Groq LPU"},
+            {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 27B (Groq)", "description": "Qwen 3.6 27B on Groq LPU"},
+            {"id": "qwen/qwen3.8-27b", "name": "Qwen 3.8 27B (Groq)", "description": "Qwen 3.8 27B on Groq LPU"},
+            {"id": "allam-2-7b", "name": "Allam 2 7B (Groq)", "description": "Allam 2 7B on Groq LPU"}
+        ]
+
+    def _is_gemini_model(self, model_name: str) -> bool:
+        lower = model_name.lower()
+        return (
+            lower.startswith("gemini")
+            or lower.startswith("gemma")
+            or lower.startswith("models/gemini")
+            or lower.startswith("models/gemma")
+            or "nano-banana" in lower
+            or "antigravity" in lower
+            or "deep-research" in lower
+            or "lyria" in lower
+        )
 
     def get_llm_client(self, model_name: Optional[str] = None):
         """Instantiates or returns a cached LangChain LLM client (ChatGroq or ChatGoogleGenerativeAI)."""
         target_model = model_name or self.default_model_name
 
         if target_model not in self._clients:
-            if target_model.startswith("gemini"):
+            if self._is_gemini_model(target_model):
                 if not self.gemini_api_key:
                     raise ValueError("GEMINI_API_KEY is not configured in environment.")
                 self._clients[target_model] = ChatGoogleGenerativeAI(
@@ -131,7 +142,8 @@ class LLMService:
                     google_api_key=self.gemini_api_key,
                     temperature=self.temperature,
                     max_output_tokens=4096,
-                    convert_system_message_to_human=True
+                    max_retries=1,
+                    timeout=15.0
                 )
             else:
                 if not self.groq_api_key:
@@ -140,7 +152,9 @@ class LLMService:
                     model=target_model,
                     groq_api_key=self.groq_api_key,
                     temperature=self.temperature,
-                    max_tokens=4096
+                    max_tokens=2048,
+                    max_retries=1,
+                    timeout=15.0
                 )
 
         return self._clients[target_model]
@@ -154,14 +168,11 @@ class LLMService:
         if self.groq_api_key:
             available.extend(self._fetch_groq_models())
         if self.gemini_api_key:
-            available.extend([
-                {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "description": "Google Gemini 2.5 Flash"},
-                {"id": "gemini-3.6-flash", "name": "Gemini 3.6 Flash", "description": "Google Gemini 3.6 Flash"}
-            ])
+            available.extend(self._fetch_gemini_models())
 
         if not available:
             available = [
-                {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 27B (Groq)", "description": "Qwen 3.6 27B model on Groq"}
+                {"id": "groq/compound", "name": "Compound (Groq)", "description": "Groq Compound model"}
             ]
 
         available.sort(key=lambda x: 0 if x["id"] == self.default_model_name else 1)
@@ -193,6 +204,8 @@ class LLMService:
             return clean_think_tags(raw_text)
         except Exception as e:
             err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "rate_limit" in err_msg.lower():
+                return f"⚠️ [API Quota Limit]: {target_model} has exceeded its Free Tier rate limit. Please switch to another model (such as Compound or Qwen on Groq) in the model dropdown."
             return f"⚠️ [LLM Provider Error ({target_model})]: {err_msg}"
 
     def stream_response(self, prompt_input: Any, model_name: Optional[str] = None):
@@ -230,6 +243,9 @@ class LLMService:
 
         except Exception as e:
             err_msg = str(e)
-            yield f"\n\n⚠️ [LLM Streaming Error ({target_model})]: {err_msg}"
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "rate_limit" in err_msg.lower():
+                yield f"\n\n⚠️ [API Quota Limit]: {target_model} has exceeded its Free Tier rate limit. Please switch to another model (such as Compound or Qwen on Groq) in the top dropdown."
+            else:
+                yield f"\n\n⚠️ [LLM Streaming Error ({target_model})]: {err_msg}"
 
 

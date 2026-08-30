@@ -27,6 +27,7 @@ backend/data/chroma_db/*
 backend/data/metadata.db
 *.db
 *.pdf
+Mech_RAG_pdfs/
 !tests/sample_pdfs/.gitkeep
 tests/test_chroma_db/
 tests/output_chunks.json

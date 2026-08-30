@@ -46,6 +46,25 @@ html, body {
   max-width: 100% !important;
   overflow-wrap: break-word;
   word-break: break-word;
+  line-height: 1.8;
+  letter-spacing: 0.012em;
+}
+
+.prose p {
+  line-height: 1.85 !important;
+  margin-bottom: 1.25rem !important;
+  letter-spacing: 0.01em;
+}
+
+.prose > *:last-child,
+.prose p:last-child,
+.prose ul:last-child,
+.prose ol:last-child,
+.prose blockquote:last-child,
+.prose pre:last-child,
+.prose div:last-child {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .prose p, .prose li, .prose h1, .prose h2, .prose h3, .prose span, .prose div {
@@ -59,8 +78,11 @@ html, body {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  border-radius: 6px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 1.25rem 0;
+  background: #070b08;
+  border: 1px solid #1c2620;
 }
 
 .prose code {
@@ -69,18 +91,28 @@ html, body {
   word-break: break-word;
 }
 
-/* KaTeX Math Overflow Handling */
+/* KaTeX Math Display Equation Formatting & Spacing */
 .katex-display {
-  margin: 0.8em 0 !important;
+  margin: 1.5rem 0 !important;
+  padding: 16px 22px !important;
+  background: rgba(10, 15, 12, 0.75) !important;
+  border: 1px solid rgba(95, 138, 77, 0.35) !important;
+  border-radius: 8px !important;
   max-width: 100% !important;
   overflow-x: auto !important;
   overflow-y: hidden !important;
-  padding: 4px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .katex {
-  font-size: 1.08em;
+  font-size: 1.1em;
   color: #f8fafc !important;
+  letter-spacing: normal;
+}
+
+/* Inline math spacing */
+span.katex {
+  padding: 0 2px;
 }
 
 /* Animations */

@@ -35,6 +35,28 @@ Context Snippets:
 ----------------------------------------
 """
 
+DIRECT_CONVERSATION_SYSTEM_PROMPT = """You are an expert Mechanical Engineering AI Assistant.
+You assist students with engineering concepts, math, textbook follow-ups, calculations, and general questions.
+
+STRICT RESPONSE & FORMATTING RULES:
+1. NO THINKING PROCESS / SCRATCHPAD TAGS:
+   - Output ONLY your final response to the student.
+   - NEVER output internal thinking blocks, <think>...</think> tags, or reasoning scratchpad text.
+
+2. LATEX MATHEMATICAL EQUATIONS:
+   - Whenever writing mathematical symbols, variables, or equations, ALWAYS wrap them in valid KaTeX LaTeX syntax:
+     - Wrap inline variables and symbols in single dollar signs: e.g., $p$, $\\rho$, $T$, $Re = \\frac{\\rho V D}{\\mu}$.
+     - Wrap standalone display equations in double dollar signs on their own line:
+       $$
+       \\sigma = \\frac{F}{A}
+       $$
+
+3. CONVERSATION CONTINUITY & CONTEXT:
+   - Carefully follow the user's ongoing conversation history.
+   - If the user asks a follow-up, clarification, or asks to simplify/explain something from previous assistant turns, answer directly and accurately using the context established in the conversation history.
+   - If the user sends a greeting or pleasantry, respond warmly and professionally as an engineering assistant.
+"""
+
 class PromptBuilderService:
     """
     Engineering System Prompt & Context Builder Service.
@@ -94,6 +116,27 @@ class PromptBuilderService:
                     messages.append(AIMessage(content=content))
 
         # Append current user query
+        messages.append(HumanMessage(content=query))
+        return messages
+
+    def build_direct_chat_messages(
+        self,
+        query: str,
+        history: Optional[List[Dict[str, str]]] = None
+    ) -> List[BaseMessage]:
+        """Builds structured LangChain messages for direct conversational turns and history-grounded follow-ups without textbook retrieval."""
+        messages: List[BaseMessage] = [SystemMessage(content=DIRECT_CONVERSATION_SYSTEM_PROMPT)]
+
+        if history:
+            recent_turns = history[-8:] # Keep up to last 8 turns for conversational context
+            for turn in recent_turns:
+                role = turn.get("role", "")
+                content = turn.get("content", "")
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role in ("assistant", "agent"):
+                    messages.append(AIMessage(content=content))
+
         messages.append(HumanMessage(content=query))
         return messages
 

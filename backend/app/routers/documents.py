@@ -7,6 +7,7 @@ from app.routers.upload import rag_engine
 router = APIRouter(prefix="/api/v1/documents", tags=["Documents"])
 
 @router.get("")
+@router.get("/")
 async def list_documents():
     """Returns a list of all uploaded/indexed textbooks and metadata status from SQLite metadata DB."""
     records = list_all_documents()

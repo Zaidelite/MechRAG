@@ -21,12 +21,13 @@ from app.services.reranker import RerankerService
 from app.services.prompt_builder import PromptBuilderService
 from app.services.llm import LLMService
 from app.services.citation import CitationService
+from app.services.query_router import QueryRouterService
 from app.schemas.rag_schemas import QueryResponse
 
 class RAGEngine:
     """
     Master RAG Engine Pipeline Orchestrator.
-    Connects ingestion, chunking, embedding, vector storage, hybrid RRF reranking, system prompt building, Gemini LLM inference, and citation formatting.
+    Connects ingestion, chunking, embedding, vector storage, hybrid RRF reranking, intelligent query routing, system prompt building, Gemini LLM inference, and citation formatting.
     """
     def __init__(self, chroma_dir: Optional[str] = None):
         init_db()
@@ -38,6 +39,7 @@ class RAGEngine:
         self.prompt_builder = PromptBuilderService()
         self.llm = LLMService()
         self.citation = CitationService()
+        self.query_router = QueryRouterService(llm_service=self.llm)
         
         # In-memory document chunk store for BM25 sparse keyword retrieval
         self._cached_chunks: List[Document] = []
@@ -139,7 +141,19 @@ class RAGEngine:
         filters: Optional[Dict[str, Any]] = None,
         model_name: Optional[str] = None
     ) -> QueryResponse:
-        """High-level query pipeline with multi-turn history: Vector Search + BM25 -> RRF Reranking -> System Prompt & History -> LLM -> Citation Output."""
+        """High-level query pipeline with intent classification, multi-turn history, hybrid search, RRF reranking, and citation formatting."""
+        # 0. Intelligent Intent Classification
+        intent = self.query_router.classify_intent(query_text=query_text, history=history, model_name=model_name)
+
+        if intent == "DIRECT_ANSWER":
+            prompt_messages = self.prompt_builder.build_direct_chat_messages(query=query_text, history=history)
+            llm_response = self.llm.generate_response(prompt_messages, model_name=model_name)
+            return QueryResponse(
+                query=query_text,
+                answer=llm_response,
+                citations=[]
+            )
+
         k_vector = top_k_vector or settings.TOP_K_RETRIEVAL
         n_rerank = top_n_rerank or settings.TOP_K_RERANK
 
@@ -168,7 +182,9 @@ class RAGEngine:
         )
 
         # 4. Format Context & System Prompt Messages with History
-        formatted_context = self.prompt_builder.format_context_documents(top_context_docs)
+        target_model = model_name or settings.LLM_MODEL
+        max_chars = 6000 if target_model and not target_model.startswith("gemini") else 24000
+        formatted_context = self.prompt_builder.format_context_documents(top_context_docs, max_total_chars=max_chars)
         prompt_messages = self.prompt_builder.build_prompt_messages(
             formatted_context=formatted_context,
             query=query_text,
@@ -196,8 +212,22 @@ class RAGEngine:
         filters: Optional[Dict[str, Any]] = None,
         model_name: Optional[str] = None
     ):
-        """Streaming query pipeline with multi-turn history: Vector Search + BM25 -> RRF Reranking -> LLM Stream -> Citations + Token SSE output."""
+        """Streaming query pipeline with intent routing, multi-turn history, hybrid search, RRF reranking, and token SSE output."""
         import json
+
+        # 0. Intelligent Intent Classification
+        intent = self.query_router.classify_intent(query_text=query_text, history=history, model_name=model_name)
+
+        if intent == "DIRECT_ANSWER":
+            prompt_messages = self.prompt_builder.build_direct_chat_messages(query=query_text, history=history)
+            # Emit empty citations event
+            yield f"data: {json.dumps({'type': 'citations', 'citations': [], 'data': []})}\n\n"
+            # Stream tokens directly from LLM
+            for token in self.llm.stream_response(prompt_messages, model_name=model_name):
+                yield f"data: {json.dumps({'type': 'token', 'content': token, 'data': token})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
         k_vector = top_k_vector or settings.TOP_K_RETRIEVAL
         n_rerank = top_n_rerank or settings.TOP_K_RERANK
 
@@ -225,7 +255,9 @@ class RAGEngine:
         )
 
         # 4. Format Context & System Prompt Messages with History
-        formatted_context = self.prompt_builder.format_context_documents(top_context_docs)
+        target_model = model_name or settings.LLM_MODEL
+        max_chars = 6000 if target_model and not target_model.startswith("gemini") else 24000
+        formatted_context = self.prompt_builder.format_context_documents(top_context_docs, max_total_chars=max_chars)
         prompt_messages = self.prompt_builder.build_prompt_messages(
             formatted_context=formatted_context,
             query=query_text,

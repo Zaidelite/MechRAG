@@ -30,12 +30,25 @@ import {
 } from '../services/api';
 import { DocumentRecord, Citation, QueryResponse } from '../types';
 
+const DiscordIcon: React.FC<{ size?: number; style?: React.CSSProperties }> = ({ size = 14, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    style={{ flexShrink: 0, ...style }}
+  >
+    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+  </svg>
+);
+
 const MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Groq)' },
-  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (Groq)' },
-  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (Groq)' },
-  { id: 'gemma2-9b-it', label: 'Gemma 2 9B (Groq)' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { id: 'groq/compound', label: 'Compound (Groq)' },
+  { id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (Groq)' },
+  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B (Groq)' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Google)' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Google)' },
+  { id: 'gemini-flash-latest', label: 'Gemini Flash Latest (Google)' },
 ];
 
 interface MessageItem {
@@ -85,7 +98,9 @@ export default function Home() {
   const loadDocuments = async () => {
     try {
       const res = await listDocuments();
-      setDocuments(res.documents || []);
+      if (res && res.documents) {
+        setDocuments(res.documents);
+      }
     } catch (e) {
       console.error('Failed to load documents:', e);
     }
@@ -94,10 +109,10 @@ export default function Home() {
   const loadModels = async () => {
     try {
       const res = await fetchAvailableModels();
-      if (res.models && res.models.length > 0) {
+      if (res && res.models && res.models.length > 0) {
         const formatted = res.models.map((m) => ({ id: m.id, label: m.name }));
         setAvailableModels(formatted);
-        setModel(formatted[0].id);
+        setModel((prev) => (formatted.some((f) => f.id === prev) ? prev : formatted[0].id));
       }
     } catch (e) {
       console.error('Failed to load models:', e);
@@ -107,6 +122,14 @@ export default function Home() {
   useEffect(() => {
     loadDocuments();
     loadModels();
+
+    // Auto-retry polling once after 2.5s in case backend was warming up
+    const timer = setTimeout(() => {
+      loadDocuments();
+      loadModels();
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -157,9 +180,9 @@ export default function Home() {
       )
     );
 
-    // Construct multi-turn history from current chat session
+    // Construct multi-turn history from current chat session (exclude welcome prompt and empty messages)
     const historyPayload = activeChat.messages
-      .filter((m) => m.text && m.text.trim())
+      .filter((m) => m.id !== 'welcome' && m.text && m.text.trim())
       .map((m) => ({
         role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant',
         content: m.text,
@@ -248,7 +271,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.0.0</span>
+              <span style={styles.sidebarBrandVersion}>v1.2.0</span>
             </div>
           )}
 
@@ -367,7 +390,7 @@ export default function Home() {
         <div style={styles.header}>
           <div style={styles.headerTitleRow}>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.0.0</span>
+            <span style={styles.headerVersion}>v1.2.0</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {selectedBookFilter && (
@@ -375,6 +398,16 @@ export default function Home() {
                 <BookOpen size={11} /> {selectedBookFilter}
               </span>
             )}
+            <a
+              href="https://discord.gg/XGCr7afTY"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.discordBtn}
+              title="Join our Discord community"
+            >
+              <DiscordIcon size={13} />
+              <span>Join Discord</span>
+            </a>
             <span style={styles.headerDim}>session active</span>
           </div>
         </div>
@@ -389,7 +422,12 @@ export default function Home() {
                 citations={m.citations}
               />
             ))}
-            {isThinking && <ThinkingBubble />}
+            {isThinking &&
+              (!activeChat?.messages.length ||
+                activeChat.messages[activeChat.messages.length - 1]?.role !== 'agent' ||
+                !activeChat.messages[activeChat.messages.length - 1]?.text) && (
+                <ThinkingBubble />
+              )}
           </div>
         </div>
 
@@ -854,6 +892,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: COLORS.textMuted,
   },
+  discordBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '3px 9px',
+    background: 'rgba(88, 101, 242, 0.12)',
+    border: '1px solid rgba(88, 101, 242, 0.35)',
+    borderRadius: 5,
+    color: '#9baaf4',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 11,
+    fontWeight: 500,
+    textDecoration: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
   filterBadge: {
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 11,
@@ -874,16 +928,16 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 1150,
     width: '100%',
     margin: '0 auto',
-    padding: '24px 28px 16px',
+    padding: '28px 36px 20px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 18,
+    gap: 26,
     boxSizing: 'border-box',
   },
   msgRow: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 12,
     width: '100%',
     minWidth: 0,
   },
@@ -893,16 +947,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: COLORS.greenDim,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 4,
-    padding: '2px 5px',
-    marginTop: 3,
+    padding: '2px 6px',
+    marginTop: 4,
     flexShrink: 0,
   },
   bubble: {
-    maxWidth: '95%',
-    padding: '12px 16px',
+    maxWidth: '96%',
+    padding: '12px 18px',
     borderRadius: 8,
     fontSize: 15.5,
-    lineHeight: 1.6,
+    lineHeight: 1.8,
+    letterSpacing: '0.012em',
     boxSizing: 'border-box',
     overflowWrap: 'break-word',
     wordBreak: 'break-word',
@@ -912,12 +967,13 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(143,191,118,0.10)',
     border: `1px solid ${COLORS.greenDim}`,
     color: COLORS.greenBright,
+    padding: '12px 18px',
   },
   bubbleAgent: {
     background: COLORS.panel,
     border: `1px solid ${COLORS.border}`,
     color: '#f3f4f6',
-    padding: '16px 26px 16px 36px',
+    padding: '18px 26px 14px',
   },
 
   citationContainer: {
