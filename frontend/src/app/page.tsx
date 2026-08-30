@@ -16,7 +16,8 @@ import {
   Upload,
   BookOpen,
   Trash2,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import MathMarkdown from '../components/MathMarkdown';
 import Sidebar, { ChatSession } from '../components/Sidebar';
@@ -51,6 +52,48 @@ const MODELS = [
   { id: 'gemini-flash-latest', label: 'Gemini Flash Latest (Google)' },
 ];
 
+const DOMAIN_OPTIONS: Array<{
+  id: string;
+  filterValue: string | null;
+  name: string;
+  fullName: string;
+  icon: string;
+  description: string;
+}> = [
+  {
+    id: 'all',
+    filterValue: null,
+    name: 'All Domains',
+    fullName: 'All Mechanical Domains',
+    icon: '🌐',
+    description: 'Cross-domain holistic search',
+  },
+  {
+    id: 'fluid_n_thermal',
+    filterValue: 'fluid_n_thermal',
+    name: 'Fluid & Thermal',
+    fullName: 'Fluid & Thermal Sciences',
+    icon: '🌊',
+    description: 'Fluids, Heat Transfer, Thermo',
+  },
+  {
+    id: 'Solids_n_machines',
+    filterValue: 'Solids_n_machines',
+    name: 'Solids & Machines',
+    fullName: 'Solids & Machine Design',
+    icon: '⚙️',
+    description: 'Dynamics, Statics, Shigley',
+  },
+  {
+    id: 'Manufacturing_processes',
+    filterValue: 'Manufacturing_processes',
+    name: 'Manufacturing',
+    fullName: 'Manufacturing & Metallurgy',
+    icon: '🏭',
+    description: 'Welding, Casting, NTM, MTM',
+  },
+];
+
 interface MessageItem {
   id: string;
   role: string;
@@ -61,7 +104,7 @@ interface MessageItem {
 const WELCOME: MessageItem = {
   id: 'welcome',
   role: 'agent',
-  text: 'How can I assist you with your studies?',
+  text: 'How can I assist you with your mechanical engineering studies?',
 };
 
 let idCounter = 1;
@@ -71,6 +114,10 @@ export default function Home() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(true);
+  const [domainOpen, setDomainOpen] = useState(true);
+
+  // Active domain filter
+  const [selectedDomainFilter, setSelectedDomainFilter] = useState<string | null>(null);
 
   // Source PDFs from backend metadata.db
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -191,6 +238,7 @@ export default function Home() {
         historyPayload,
         selectedBookFilter || undefined,
         model,
+        selectedDomainFilter || undefined,
         (token: string) => {
           setIsThinking(false);
           setChats((prev) =>
@@ -237,7 +285,8 @@ export default function Home() {
           userQuery,
           historyPayload,
           selectedBookFilter || undefined,
-          model
+          model,
+          selectedDomainFilter || undefined
         );
 
         setChats((prev) =>
@@ -264,7 +313,7 @@ export default function Home() {
                 ...c,
                 messages: c.messages.map((m) =>
                   m.id === agentMsgId
-                    ? { ...m, text: '⚠️ Connection error. Please check backend connection.' }
+                    ? { ...m, text: 'Unable to connect to RAG server. Please try again.' }
                     : m
                 ),
               };
@@ -285,6 +334,8 @@ export default function Home() {
     }
   };
 
+  const activeDomainObj = DOMAIN_OPTIONS.find((d) => d.filterValue === selectedDomainFilter);
+
   return (
     <div style={styles.app}>
 
@@ -298,7 +349,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.3.2</span>
+              <span style={styles.sidebarBrandVersion}>v1.4.0</span>
             </div>
           )}
 
@@ -331,7 +382,50 @@ export default function Home() {
 
         {!collapsed && <div style={styles.sidebarDivider} />}
 
-        {/* Middle Section: Source PDFs */}
+        {/* Middle Section: Mechanical Domains */}
+        {!collapsed && (
+          <div style={styles.sidebarSection}>
+            <div style={styles.sectionHeaderRow}>
+              <button style={styles.sectionHeader} onClick={() => setDomainOpen((v) => !v)}>
+                {domainOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <Layers size={13} style={{ color: COLORS.green }} />
+                <span>domains</span>
+                <span style={styles.countBadge}>3</span>
+              </button>
+            </div>
+
+            {domainOpen && (
+              <div style={styles.domainList}>
+                {DOMAIN_OPTIONS.map((opt) => {
+                  const isSelected = selectedDomainFilter === opt.filterValue;
+                  return (
+                    <button
+                      key={opt.id}
+                      style={{
+                        ...styles.domainItem,
+                        ...(isSelected ? styles.domainItemSelected : {}),
+                      }}
+                      onClick={() => setSelectedDomainFilter(opt.filterValue)}
+                    >
+                      <span style={{ fontSize: 15, flexShrink: 0 }}>{opt.icon}</span>
+                      <div style={styles.domainTextCol}>
+                        <span style={{ ...styles.domainTitle, color: isSelected ? COLORS.greenBright : COLORS.wheat }}>
+                          {opt.name}
+                        </span>
+                        <span style={styles.domainDesc}>{opt.description}</span>
+                      </div>
+                      {isSelected && <span style={styles.domainActiveDot} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!collapsed && <div style={styles.sidebarDivider} />}
+
+        {/* Bottom Section: Source PDFs */}
         {!collapsed && (
           <div style={styles.sidebarSection}>
             <div style={styles.sectionHeaderRow}>
@@ -418,7 +512,7 @@ export default function Home() {
                   <Sparkles size={14} style={{ color: COLORS.green }} />
                 </div>
                 <span style={styles.sidebarBrandTitle}>MechRAG</span>
-                <span style={styles.sidebarBrandVersion}>v1.3.2</span>
+                <span style={styles.sidebarBrandVersion}>v1.4.0</span>
               </div>
               <button
                 style={styles.squareIconBtn}
@@ -440,6 +534,49 @@ export default function Home() {
                 <Plus size={15} strokeWidth={2} />
                 <span>new chat</span>
               </button>
+            </div>
+
+            <div style={styles.sidebarDivider} />
+
+            <div style={styles.sidebarSection}>
+              <div style={styles.sectionHeaderRow}>
+                <button style={styles.sectionHeader} onClick={() => setDomainOpen((v) => !v)}>
+                  {domainOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <Layers size={13} style={{ color: COLORS.green }} />
+                  <span>domains</span>
+                  <span style={styles.countBadge}>3</span>
+                </button>
+              </div>
+
+              {domainOpen && (
+                <div style={styles.domainList}>
+                  {DOMAIN_OPTIONS.map((opt) => {
+                    const isSelected = selectedDomainFilter === opt.filterValue;
+                    return (
+                      <button
+                        key={opt.id}
+                        style={{
+                          ...styles.domainItem,
+                          ...(isSelected ? styles.domainItemSelected : {}),
+                        }}
+                        onClick={() => {
+                          setSelectedDomainFilter(opt.filterValue);
+                          setMobileSidebarOpen(false);
+                        }}
+                      >
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>{opt.icon}</span>
+                        <div style={styles.domainTextCol}>
+                          <span style={{ ...styles.domainTitle, color: isSelected ? COLORS.greenBright : COLORS.wheat }}>
+                            {opt.name}
+                          </span>
+                          <span style={styles.domainDesc}>{opt.description}</span>
+                        </div>
+                        {isSelected && <span style={styles.domainActiveDot} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div style={styles.sidebarDivider} />
@@ -538,9 +675,14 @@ export default function Home() {
               <PanelLeft size={18} />
             </button>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.3.2</span>
+            <span style={styles.headerVersion}>v1.4.0</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {selectedDomainFilter && activeDomainObj && (
+              <span style={styles.filterBadge}>
+                <span>{activeDomainObj.icon}</span> {activeDomainObj.name}
+              </span>
+            )}
             {selectedBookFilter && (
               <span style={styles.filterBadge}>
                 <BookOpen size={11} /> {selectedBookFilter}
@@ -888,6 +1030,66 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     padding: '1px 6px',
     fontFamily: "'JetBrains Mono', monospace",
+  },
+  domainList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5,
+    marginTop: 4,
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  domainItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    padding: '8px 10px',
+    borderRadius: 7,
+    fontSize: 12.5,
+    color: COLORS.wheatDim,
+    cursor: 'pointer',
+    background: 'transparent',
+    transition: 'all 0.15s ease',
+    border: '1px solid transparent',
+    boxSizing: 'border-box',
+    width: '100%',
+    textAlign: 'left',
+  },
+  domainItemSelected: {
+    background: COLORS.panel,
+    color: COLORS.greenBright,
+    border: `1px solid ${COLORS.greenDim}`,
+    boxShadow: '0 0 10px rgba(143,191,118,0.12)',
+  },
+  domainTextCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    flex: 1,
+  },
+  domainTitle: {
+    fontWeight: 600,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  domainDesc: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    marginTop: 1,
+  },
+  domainActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: COLORS.green,
+    flexShrink: 0,
+    marginLeft: 'auto',
+    boxShadow: `0 0 6px ${COLORS.green}`,
   },
   pdfList: {
     display: 'flex',

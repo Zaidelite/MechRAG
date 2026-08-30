@@ -18,7 +18,15 @@ class QueryRequest(BaseModel):
     history: Optional[List[ChatMessageSchema]] = Field(default=None, description="Previous conversation history turns for multi-turn chat memory")
     subject_filter: Optional[str] = Field(None, description="Filter search by subject (e.g. Thermodynamics)")
     book_filter: Optional[str] = Field(None, description="Filter search by specific book title")
+    domain_filter: Optional[str] = Field(None, description="Filter search by domain (e.g. fluid_n_thermal, Solids_n_machines, Manufacturing_processes)")
     model_name: Optional[str] = Field(None, description="Dynamic LLM model choice (e.g. gemini-2.5-flash)")
+
+class DomainCategory(BaseModel):
+    id: str
+    name: str
+    description: str
+    icon: str
+    document_count: int = 0
 
 class CitationSchema(BaseModel):
     book_title: str

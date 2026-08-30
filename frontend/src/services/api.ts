@@ -33,12 +33,14 @@ export const sendQuery = async (
   query: string,
   history?: ChatHistoryItem[],
   bookFilter?: string,
-  modelName?: string
+  modelName?: string,
+  domainFilter?: string
 ): Promise<QueryResponse> => {
   const payload: QueryRequest = {
     query,
     history: history && history.length > 0 ? history : undefined,
     book_filter: bookFilter || undefined,
+    domain_filter: domainFilter || undefined,
     model_name: modelName || undefined,
   };
   const response = await apiClient.post<QueryResponse>('/query', payload);
@@ -50,6 +52,7 @@ export const sendQueryStream = async (
   history: ChatHistoryItem[] | undefined,
   bookFilter: string | undefined,
   modelName: string | undefined,
+  domainFilter: string | undefined,
   onChunk: (token: string) => void,
   onCitations: (citations: any[]) => void
 ): Promise<void> => {
@@ -57,6 +60,7 @@ export const sendQueryStream = async (
     query,
     history: history && history.length > 0 ? history : undefined,
     book_filter: bookFilter || undefined,
+    domain_filter: domainFilter || undefined,
     model_name: modelName || undefined,
   };
 
@@ -149,6 +153,11 @@ export const getIngestionStatus = async (documentId: string): Promise<DocumentSt
 
 export const listDocuments = async (): Promise<{ total_documents: number; documents: DocumentRecord[] }> => {
   const response = await apiClient.get<{ total_documents: number; documents: DocumentRecord[] }>('/documents');
+  return response.data;
+};
+
+export const fetchDomains = async (): Promise<{ domains: import('../types').DomainCategory[]; total_documents: number }> => {
+  const response = await apiClient.get<{ domains: import('../types').DomainCategory[]; total_documents: number }>('/documents/domains');
   return response.data;
 };
 

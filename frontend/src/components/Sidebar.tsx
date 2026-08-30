@@ -5,17 +5,13 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeft,
-  FileText,
   MessageSquare,
   ChevronDown,
   ChevronRight,
-  FileCode2,
-  Trash2,
-  Upload,
   Sparkles,
-  BookOpen
+  Layers
 } from 'lucide-react';
-import { DocumentRecord } from '../types';
+import { DomainCategory } from '../types';
 
 export interface ChatSession {
   id: string;
@@ -23,14 +19,49 @@ export interface ChatSession {
   messages: any[];
 }
 
+export const DOMAIN_OPTIONS: Array<{
+  id: string;
+  filterValue: string | null;
+  name: string;
+  icon: string;
+  description: string;
+}> = [
+  {
+    id: 'all',
+    filterValue: null,
+    name: 'All Domains',
+    icon: '🌐',
+    description: 'Cross-domain engineering search',
+  },
+  {
+    id: 'fluid_n_thermal',
+    filterValue: 'fluid_n_thermal',
+    name: 'Fluid & Thermal',
+    icon: '🌊',
+    description: 'Fluids, Heat Transfer, Thermo',
+  },
+  {
+    id: 'Solids_n_machines',
+    filterValue: 'Solids_n_machines',
+    name: 'Solids & Machines',
+    icon: '⚙️',
+    description: 'Dynamics, Statics, Shigley',
+  },
+  {
+    id: 'Manufacturing_processes',
+    filterValue: 'Manufacturing_processes',
+    name: 'Manufacturing',
+    icon: '🏭',
+    description: 'Welding, Casting, NTM, MTM',
+  },
+];
+
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
-  documents: DocumentRecord[];
-  activeBookFilter: string | null;
-  onSelectBookFilter: (bookTitle: string | null) => void;
-  onDeleteDocument?: (docId: string) => void;
-  onOpenUploadModal?: () => void;
+  domains?: DomainCategory[];
+  activeDomainFilter: string | null;
+  onSelectDomainFilter: (domainId: string | null) => void;
   chats: ChatSession[];
   activeChatId: string;
   onSelectChat: (chatId: string) => void;
@@ -40,17 +71,14 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onToggle,
-  documents,
-  activeBookFilter,
-  onSelectBookFilter,
-  onDeleteDocument,
-  onOpenUploadModal,
+  activeDomainFilter,
+  onSelectDomainFilter,
   chats,
   activeChatId,
   onSelectChat,
   onNewChat,
 }) => {
-  const [pdfSectionOpen, setPdfSectionOpen] = useState(true);
+  const [domainSectionOpen, setDomainSectionOpen] = useState(true);
 
   return (
     <aside
@@ -68,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Sparkles size={14} className="text-[#8fbf76]" />
             </div>
             <span className="font-mono font-bold text-base text-[#8fbf76] tracking-tight">MechRAG</span>
-            <span className="font-mono text-[10.5px] text-[#6d7a70]">v1.3.2</span>
+            <span className="font-mono text-[10.5px] text-[#6d7a70]">v1.4.0</span>
           </div>
         )}
 
@@ -108,66 +136,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {isOpen && <div className="h-px bg-[#1c2620] mx-3.5 my-1" />}
 
-      {/* Middle Section: Source PDFs */}
+      {/* Middle Section: Mechanical Domains */}
       {isOpen && (
         <div className="flex flex-col p-3 overflow-hidden w-full box-border">
           <div className="flex items-center justify-between w-full mb-1.5">
             <button
-              onClick={() => setPdfSectionOpen((v) => !v)}
+              onClick={() => setDomainSectionOpen((v) => !v)}
               className="flex-1 flex items-center gap-1.5 bg-transparent border-none text-[#6d7a70] font-mono text-[11px] font-semibold tracking-wider uppercase p-1 rounded hover:bg-[#101712] cursor-pointer"
             >
-              {pdfSectionOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              <FileText size={13} className="text-[#8fbf76]" />
-              <span>source pdfs</span>
+              {domainSectionOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Layers size={13} className="text-[#8fbf76]" />
+              <span>domains</span>
               <span className="ml-auto text-[10px] text-[#5f8a4d] border border-[#1c2620] rounded-full px-1.5 py-0.5 font-mono">
-                {documents.length}
+                3
               </span>
             </button>
           </div>
 
-          {pdfSectionOpen && (
-            <div className="flex flex-col gap-1 mt-1 max-h-52 overflow-y-auto w-full box-border">
-              <button
-                onClick={() => onSelectBookFilter(null)}
-                className={`
-                  w-full flex items-center gap-2 text-left px-2.5 py-1.5 rounded-md text-[12.5px] font-mono transition-all cursor-pointer truncate border
-                  ${activeBookFilter === null ? 'bg-[#101712] text-[#8fbf76] border-[#5f8a4d] font-medium' : 'bg-transparent text-[#b8ae93] border-transparent hover:bg-[#101712]/60'}
-                `}
-              >
-                <BookOpen size={13} className="shrink-0 text-[#8fbf76]" />
-                <span className="truncate">All Textbooks</span>
-              </button>
-
-              {documents.length === 0 ? (
-                <div className="text-[11px] font-mono text-[#6d7a70] px-2.5 py-2 italic">
-                  no pdfs ingested yet
-                </div>
-              ) : (
-                documents.map((doc) => {
-                  const title = doc.book_title || doc.filename;
-                  const isSelected = activeBookFilter === title;
-                  return (
-                    <div
-                      key={doc.document_id}
-                      onClick={() => onSelectBookFilter(isSelected ? null : title)}
-                      className={`
-                        group flex items-center justify-between px-2.5 py-1.5 rounded-md text-[12.5px] transition-all cursor-pointer border box-border w-full
-                        ${isSelected ? 'bg-[#101712] text-[#a9d98c] border-[#5f8a4d]' : 'bg-transparent text-[#b8ae93] border-transparent hover:bg-[#101712]/60'}
-                      `}
-                    >
-                      <div className="flex items-center gap-2 truncate flex-1 min-w-0">
-                        <FileCode2 size={13} className="shrink-0 text-[#8fbf76] opacity-80" />
-                        <span className="truncate">{title}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0 ml-1.5">
-                        <span className="text-[10px] text-[#6d7a70] font-mono bg-[#0a0f0c] border border-[#1c2620] rounded px-1 py-0.5">
-                          {doc.total_pages ? `${doc.total_pages}p` : ''}
-                        </span>
-                      </div>
+          {domainSectionOpen && (
+            <div className="flex flex-col gap-1.5 mt-1 w-full box-border">
+              {DOMAIN_OPTIONS.map((opt) => {
+                const isSelected = activeDomainFilter === opt.filterValue;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => onSelectDomainFilter(opt.filterValue)}
+                    className={`
+                      w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-lg transition-all cursor-pointer border box-border
+                      ${
+                        isSelected
+                          ? 'bg-[#101712] text-[#8fbf76] border-[#5f8a4d] shadow-[0_0_10px_rgba(143,191,118,0.12)]'
+                          : 'bg-transparent text-[#b8ae93] border-transparent hover:bg-[#101712]/60 hover:border-[#1c2620]'
+                      }
+                    `}
+                  >
+                    <span className="text-[15px] shrink-0">{opt.icon}</span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className={`text-[12.5px] truncate font-medium ${isSelected ? 'text-[#a9d98c]' : 'text-[#d8d0ba]'}`}>
+                        {opt.name}
+                      </span>
+                      <span className="text-[10px] text-[#6d7a70] truncate">
+                        {opt.description}
+                      </span>
                     </div>
-                  );
-                })
-              )}
+                    {isSelected && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#8fbf76] shrink-0 ml-auto shadow-[0_0_6px_#8fbf76]" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -190,7 +207,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => onSelectChat(c.id)}
                   className={`
                     w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-md text-[12.5px] transition-all cursor-pointer box-border
-                    ${isActive ? 'bg-[#101712] text-[#e9dfc4] border-l-3 border-l-[#8fbf76] border-y border-r border-[#1c2620]' : 'bg-transparent text-[#b8ae93] border border-transparent hover:bg-[#101712]/50'}
+                    ${
+                      isActive
+                        ? 'bg-[#101712] text-[#e9dfc4] border-l-3 border-l-[#8fbf76] border-y border-r border-[#1c2620]'
+                        : 'bg-transparent text-[#b8ae93] border border-transparent hover:bg-[#101712]/50'
+                    }
                   `}
                 >
                   <MessageSquare size={13} className={`shrink-0 ${isActive ? 'text-[#a9d98c]' : 'text-[#6d7a70]'}`} />

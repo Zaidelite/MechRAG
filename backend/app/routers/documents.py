@@ -6,6 +6,45 @@ from app.routers.upload import rag_engine
 
 router = APIRouter(prefix="/api/v1/documents", tags=["Documents"])
 
+DOMAINS_METADATA = [
+    {
+        "id": "fluid_n_thermal",
+        "name": "Fluid & Thermal Sciences",
+        "description": "Thermodynamics, Heat Transfer, Fluid Mechanics, IC Engines, and Aerodynamics",
+        "icon": "Waves",
+    },
+    {
+        "id": "Solids_n_machines",
+        "name": "Solids & Machine Design",
+        "description": "Dynamics, Statics & Strength of Materials, Material Science, Machine Design (Shigley's)",
+        "icon": "Cpu",
+    },
+    {
+        "id": "Manufacturing_processes",
+        "name": "Manufacturing & Metallurgy",
+        "description": "Welding Metallurgy & Processes, Casting, Non-Traditional Machining (NTM), MTM",
+        "icon": "Factory",
+    },
+]
+
+@router.get("/domains")
+async def list_domains():
+    """Returns the 3 Core Mechanical Engineering domains with textbook counts."""
+    docs = list_all_documents()
+    domain_counts = {}
+    for doc in docs:
+        d_id = doc.get("domain")
+        if d_id:
+            domain_counts[d_id] = domain_counts.get(d_id, 0) + 1
+
+    result = []
+    for d in DOMAINS_METADATA:
+        result.append({
+            **d,
+            "document_count": domain_counts.get(d["id"], 0)
+        })
+    return {"domains": result, "total_documents": len(docs)}
+
 @router.get("")
 @router.get("/")
 async def list_documents():

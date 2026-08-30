@@ -21,7 +21,9 @@ async def query_rag(request: QueryRequest):
         )
 
     filters = {}
-    if request.book_filter:
+    if request.domain_filter:
+        filters["domain"] = request.domain_filter
+    elif request.book_filter:
         filters["book_title"] = request.book_filter
 
     history_dicts = [h.dict() for h in request.history] if request.history else None
@@ -50,7 +52,9 @@ async def query_rag_stream(request: QueryRequest):
         )
 
     filters = {}
-    if request.book_filter:
+    if request.domain_filter:
+        filters["domain"] = request.domain_filter
+    elif request.book_filter:
         filters["book_title"] = request.book_filter
 
     history_dicts = [h.dict() for h in request.history] if request.history else None

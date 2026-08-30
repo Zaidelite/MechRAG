@@ -14,11 +14,20 @@ export interface ChatHistoryItem {
   content: string;
 }
 
+export interface DomainCategory {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  document_count: number;
+}
+
 export interface QueryRequest {
   query: string;
   history?: ChatHistoryItem[];
   subject_filter?: string;
   book_filter?: string;
+  domain_filter?: string;
   model_name?: string;
 }
 

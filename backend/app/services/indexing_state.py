@@ -34,9 +34,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS documents (
                 document_id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
-                filepath TEXT NOT NULL,
+                filepath TEXT,
                 sha256 TEXT NOT NULL UNIQUE,
                 book_title TEXT,
+                domain TEXT,
+                domain_name TEXT,
                 author TEXT,
                 total_pages INTEGER,
                 status TEXT NOT NULL DEFAULT 'pending',
