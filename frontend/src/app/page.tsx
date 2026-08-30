@@ -298,7 +298,7 @@ export default function Home() {
                 <Sparkles size={14} style={{ color: COLORS.green }} />
               </div>
               <span style={styles.sidebarBrandTitle}>MechRAG</span>
-              <span style={styles.sidebarBrandVersion}>v1.3.1</span>
+              <span style={styles.sidebarBrandVersion}>v1.3.2</span>
             </div>
           )}
 
@@ -418,7 +418,7 @@ export default function Home() {
                   <Sparkles size={14} style={{ color: COLORS.green }} />
                 </div>
                 <span style={styles.sidebarBrandTitle}>MechRAG</span>
-                <span style={styles.sidebarBrandVersion}>v1.3.1</span>
+                <span style={styles.sidebarBrandVersion}>v1.3.2</span>
               </div>
               <button
                 style={styles.squareIconBtn}
@@ -538,7 +538,7 @@ export default function Home() {
               <PanelLeft size={18} />
             </button>
             <span style={styles.headerTitle}>MechRAG</span>
-            <span style={styles.headerVersion}>v1.3.1</span>
+            <span style={styles.headerVersion}>v1.3.2</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {selectedBookFilter && (
