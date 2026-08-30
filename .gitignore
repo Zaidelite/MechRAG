@@ -24,6 +24,7 @@ backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 backend/data/chroma_db/*
 !backend/data/chroma_db/.gitkeep
+backend/data/fastembed_cache/
 !backend/data/metadata.db
 Mech_RAG_pdfs/
 !tests/sample_pdfs/.gitkeep

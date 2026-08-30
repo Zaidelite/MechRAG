@@ -1,7 +1,12 @@
+import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List, Optional
 from langchain_core.embeddings import Embeddings
 from app.config import settings
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_FASTEMBED_CACHE = str(BASE_DIR / "data" / "fastembed_cache")
 
 class FastEmbedLangChainWrapper(Embeddings):
     """
@@ -9,9 +14,11 @@ class FastEmbedLangChainWrapper(Embeddings):
     Memory footprint: ~25 MB (vs PyTorch's 850 MB).
     3x faster on CPU with identical 384-dim BAAI/bge-small-en-v1.5 vectors.
     """
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", cache_dir: Optional[str] = None):
         from fastembed import TextEmbedding
-        self.model = TextEmbedding(model_name=model_name)
+        c_dir = cache_dir or os.environ.get("FASTEMBED_CACHE_PATH", DEFAULT_FASTEMBED_CACHE)
+        os.makedirs(c_dir, exist_ok=True)
+        self.model = TextEmbedding(model_name=model_name, cache_dir=c_dir)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return [v.tolist() for v in self.model.embed(texts)]

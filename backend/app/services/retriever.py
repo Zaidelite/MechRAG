@@ -37,15 +37,19 @@ class RetrieverService:
                     from pinecone import Pinecone
                     pc = Pinecone(api_key=settings.PINECONE_API_KEY)
                     index_name = settings.PINECONE_INDEX_NAME or "mech-rag"
-                    self._vector_store = PineconeVectorStore(
-                        index=pc.Index(index_name),
-                        embedding=self.embedder_service.get_langchain_embeddings()
-                    )
-                    self._is_pinecone = True
-                    print(f"✅ Vector Store: Connected to Pinecone Cloud (Index: '{index_name}')")
-                    return self._vector_store
+                    existing_names = [idx.name for idx in pc.list_indexes()]
+                    if index_name in existing_names:
+                        self._vector_store = PineconeVectorStore(
+                            index=pc.Index(index_name),
+                            embedding=self.embedder_service.get_langchain_embeddings()
+                        )
+                        self._is_pinecone = True
+                        print(f"✅ Vector Store: Connected to Pinecone Cloud (Index: '{index_name}')")
+                        return self._vector_store
+                    else:
+                        print(f"⚠️ Pinecone index '{index_name}' not found (Available: {existing_names}). Using local ChromaDB.")
                 except Exception as e:
-                    print(f"⚠️ Pinecone connection failed, falling back to local ChromaDB: {e}")
+                    print(f"⚠️ Pinecone connection check failed, using local ChromaDB: {e}")
 
             # Fallback to persistent local ChromaDB
             self._vector_store = Chroma(
