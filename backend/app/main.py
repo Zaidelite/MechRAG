@@ -1,8 +1,17 @@
+import os
+import torch
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import upload, status, query, documents
 from app.services.indexing_state import init_db
+
+# Optimize memory consumption for cloud CPU environments (Render 512MB RAM)
+try:
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+except Exception:
+    pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
