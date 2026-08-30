@@ -4,7 +4,6 @@ from typing import List, Optional, Dict, Any
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import VectorStore
-from langchain_chroma import Chroma
 from app.config import settings
 from app.services.embedder import EmbedderService
 
@@ -52,12 +51,16 @@ class RetrieverService:
                     print(f"⚠️ Pinecone connection check failed, using local ChromaDB: {e}")
 
             # Fallback to persistent local ChromaDB
-            self._vector_store = Chroma(
-                collection_name=self.collection_name,
-                embedding_function=self.embedder_service.get_langchain_embeddings(),
-                persist_directory=self.persist_dir
-            )
-            print("✅ Vector Store: Connected to local ChromaDB")
+            try:
+                from langchain_chroma import Chroma
+                self._vector_store = Chroma(
+                    collection_name=self.collection_name,
+                    embedding_function=self.embedder_service.get_langchain_embeddings(),
+                    persist_directory=self.persist_dir
+                )
+                print("✅ Vector Store: Connected to local ChromaDB")
+            except ImportError:
+                print("⚠️ ChromaDB not installed. Operating with Cloud Vector Store.")
         return self._vector_store
 
     def add_documents(self, documents: List[Document]) -> int:

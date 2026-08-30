@@ -27,6 +27,7 @@ backend/data/chroma_db/*
 backend/data/fastembed_cache/
 !backend/data/metadata.db
 Mech_RAG_pdfs/
+Mech_RAG_local/
 !tests/sample_pdfs/.gitkeep
 tests/test_chroma_db/
 tests/output_chunks.json
