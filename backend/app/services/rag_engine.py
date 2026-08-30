@@ -31,10 +31,11 @@ class RAGEngine:
     """
     def __init__(self, chroma_dir: Optional[str] = None):
         init_db()
+        self.chroma_dir = chroma_dir
         self.parser = PDFParserService()
         self.chunker = TextChunkerService()
-        self.embedder = EmbedderService()
-        self.retriever = RetrieverService(persist_dir=chroma_dir, embedder_service=self.embedder)
+        self._embedder: Optional[EmbedderService] = None
+        self._retriever: Optional[RetrieverService] = None
         self.reranker = RerankerService()
         self.prompt_builder = PromptBuilderService()
         self.llm = LLMService()
@@ -44,6 +45,18 @@ class RAGEngine:
         # In-memory document chunk store for BM25 sparse keyword retrieval
         self._cached_chunks: List[Document] = []
         self._bm25_retriever: Optional[BM25Retriever] = None
+
+    @property
+    def embedder(self) -> EmbedderService:
+        if self._embedder is None:
+            self._embedder = EmbedderService()
+        return self._embedder
+
+    @property
+    def retriever(self) -> RetrieverService:
+        if self._retriever is None:
+            self._retriever = RetrieverService(persist_dir=self.chroma_dir, embedder_service=self.embedder)
+        return self._retriever
 
     def ingest_pdf(self, pdf_path: str, max_pages: Optional[int] = None, force_reindex: bool = False) -> Dict[str, Any]:
         """Full document ingestion pipeline: SHA256 dedup -> PyMuPDF LaTeX parse -> 800-token chunk -> ChromaDB vector index -> SQLite state update."""

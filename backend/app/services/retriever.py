@@ -21,12 +21,18 @@ class RetrieverService:
         
         self.embedder_service = embedder_service or EmbedderService()
         self.collection_name = collection_name
-        
-        self.vector_store = Chroma(
-            collection_name=self.collection_name,
-            embedding_function=self.embedder_service.get_langchain_embeddings(),
-            persist_directory=self.persist_dir
-        )
+        self._vector_store: Optional[Chroma] = None
+
+    @property
+    def vector_store(self) -> Chroma:
+        """Lazy-loads persistent ChromaDB on-demand to ensure fast, low-memory server boot."""
+        if self._vector_store is None:
+            self._vector_store = Chroma(
+                collection_name=self.collection_name,
+                embedding_function=self.embedder_service.get_langchain_embeddings(),
+                persist_directory=self.persist_dir
+            )
+        return self._vector_store
 
     def add_documents(self, documents: List[Document]) -> int:
         """Indexes batch chunk Document objects into persistent ChromaDB."""
