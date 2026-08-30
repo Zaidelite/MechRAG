@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from langchain_core.embeddings import Embeddings
+from app.config import settings
 
 class FastEmbedLangChainWrapper(Embeddings):
     """
-    Ultra-lightweight ONNX Runtime embedding engine (FastEmbed by Qdrant).
+    Ultra-lightweight local ONNX Runtime embedding engine (FastEmbed by Qdrant).
     Memory footprint: ~25 MB (vs PyTorch's 850 MB).
     3x faster on CPU with identical 384-dim BAAI/bge-small-en-v1.5 vectors.
     """
@@ -30,8 +31,9 @@ class BaseEmbedder(ABC):
 
 class EmbedderService(BaseEmbedder):
     """
-    Production Ultra-Low Memory Local Embedding Service.
-    Uses ONNX-quantized FastEmbed for < 30MB RAM footprint on free-tier cloud containers (Render).
+    Production Hybrid Embedding Service.
+    Priority 1: Google Gemini Embedding API (models/text-embedding-004) -> 0 MB RAM, 0% CPU, instant.
+    Priority 2 (Fallback): Local ONNX FastEmbed (BAAI/bge-small-en-v1.5) -> Pre-cached in Docker, <25MB RAM.
     """
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
         self.model_name = model_name
@@ -39,11 +41,27 @@ class EmbedderService(BaseEmbedder):
 
     @property
     def embeddings(self) -> Embeddings:
-        """Lazy-loads ONNX FastEmbed embedding engine on-demand."""
+        """Lazy-loads embedding engine prioritizing Google Gemini with FastEmbed local fallback."""
         if self._embeddings is None:
+            # 1. Try Google Gemini Embeddings first (0 MB RAM, uses existing GEMINI_API_KEY)
+            if settings.GEMINI_API_KEY:
+                try:
+                    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+                    self._embeddings = GoogleGenerativeAIEmbeddings(
+                        model="models/text-embedding-004",
+                        google_api_key=settings.GEMINI_API_KEY
+                    )
+                    print("✅ Embedding Engine: Using Google Gemini (models/text-embedding-004)")
+                    return self._embeddings
+                except Exception as e:
+                    print(f"⚠️ Gemini Embedding init failed, falling back to local FastEmbed: {e}")
+
+            # 2. Local ONNX FastEmbed fallback (Pre-cached in Docker, 0 network downloads)
             try:
                 self._embeddings = FastEmbedLangChainWrapper(model_name=self.model_name)
-            except Exception:
+                print("✅ Embedding Engine: Using Local ONNX FastEmbed (BAAI/bge-small-en-v1.5)")
+            except Exception as e:
+                print(f"⚠️ FastEmbed init failed, falling back to SentenceTransformers: {e}")
                 from langchain_huggingface import HuggingFaceEmbeddings
                 self._embeddings = HuggingFaceEmbeddings(
                     model_name=self.model_name,
